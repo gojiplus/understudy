@@ -1,10 +1,13 @@
-# understudy
+## understudy: Scenario Testing for AI Agents
 
 [![PyPI version](https://badge.fury.io/py/understudy.svg)](https://badge.fury.io/py/understudy)
+[![Downloads](https://pepy.tech/badge/understudy)](https://pepy.tech/project/understudy)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Documentation](https://github.com/gojiplus/understudy/actions/workflows/docs.yml/badge.svg)](https://gojiplus.github.io/understudy/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Test your AI agents with simulated users.
+
+Understudy is a scenario-driven testing framework for AI agents that simulates realistic multi-turn users, runs those scenes against an agent through a simple app adapter, records a structured execution trace of messages, tool calls, handoffs, and terminal states, and then evaluates behavior with deterministic checks, optional LLM judges, and run reports.
 
 ## Installation
 
