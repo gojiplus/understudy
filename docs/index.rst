@@ -1,42 +1,64 @@
 understudy
 ==========
 
-**Simulation and trace-based evaluation for agentic systems.**
+**Simulated user testing for AI agents.**
 
-The simulated user is an understudy standing in for a real user.
-You write scenes, run rehearsals, and check the performance —
-not by reading the script, but by inspecting what actually happened.
+Test your agents with synthetic conversations before they meet real users.
 
 .. code-block:: bash
 
-   pip install understudy
+   pip install understudy[all]
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :hidden:
 
    installation
    quickstart
    adk-integration
    tutorial/index
-   api/index
    examples/index
+   api/index
 
-What It Does
+How It Works
 ------------
 
-``understudy`` is a testing layer, not a platform. It gives you:
+Testing with understudy is **4 steps**:
 
-1. **Scene files** — conversation fixtures that encode world state, user intent, persona, and expectations
-2. **A simulator** — drives the user side dynamically against your running agent
-3. **Trace capture** — records tool calls, arguments, state transitions, terminal resolution
-4. **Deterministic assertions** — pytest-native checks against the trace, not the prose
-5. **Calibrated LLM-as-judge** — for soft dimensions (tone, clarity), with sampling and majority vote
-6. **A mock layer** — fake downstream services seeded from the scene's context
+1. **Wrap your agent** — Adapt your agent (ADK, LangGraph, HTTP) to understudy's interface
+2. **Mock your tools** — Register handlers that return test data instead of calling real services
+3. **Write scenes** — YAML files defining what the simulated user wants and what you expect
+4. **Run and assert** — Execute simulations, check traces, generate reports
 
-Indices and tables
-==================
+The key insight: **assert against the trace, not the prose**. Don't check if the agent said "I've processed your return." Check if it called ``create_return()`` with the right arguments and reached the ``return_created`` terminal state.
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+See It In Action
+----------------
+
+Browse real examples from the repo:
+
+- `Example scene <https://github.com/gojiplus/understudy/blob/main/example/scenes/return_eligible_backpack.yaml>`_ — YAML defining what the simulated user wants
+- `Test file <https://github.com/gojiplus/understudy/blob/main/example/test_returns.py>`_ — pytest assertions against traces
+- `Sample report <https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/example/sample_report.html>`_ — HTML report from ``understudy report``
+
+**What a simulation run looks like:**
+
+.. code-block:: text
+
+   === return_eligible_backpack ===
+   Turns: 6
+   Tool calls: ['lookup_order', 'get_return_policy', 'create_return']
+   Terminal state: return_created
+
+     ✓ required_tool: lookup_order called
+     ✓ required_tool: create_return called
+     ✓ terminal_state: return_created (allowed)
+
+   PASSED
+
+Get Started
+-----------
+
+1. :doc:`installation` — Install understudy
+2. :doc:`quickstart` — Write your first scene and run a simulation
+3. :doc:`adk-integration` — Full guide for Google ADK agents
+4. :doc:`examples/index` — Complete working example
