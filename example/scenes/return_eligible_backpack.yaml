@@ -1,0 +1,44 @@
+id: return_eligible_backpack
+description: >
+  Customer wants to return a backpack (returnable, within window).
+  Agent should process the return.
+
+starting_prompt: "I'd like to return an item please."
+conversation_plan: |
+  Goal: Return the hiking backpack from order ORD-10031.
+  - Provide order ID ORD-10031 when asked.
+  Return reason: too small, doesn't fit gear.
+  Cooperate with all steps.
+
+persona: cooperative
+max_turns: 15
+
+context:
+  customer:
+    name: Jordan Lee
+    email: jordan@example.com
+  orders:
+    ORD-10031:
+      items:
+        - name: Hiking Backpack
+          sku: HB-220
+          category: outdoor_gear
+          price: 129.99
+      date: "2025-02-28"
+      status: delivered
+  policy:
+    non_returnable_categories:
+      - personal_audio
+      - perishables
+      - final_sale
+    return_window_days: 30
+
+expectations:
+  required_tools:
+    - lookup_order
+    - get_return_policy
+    - create_return
+  forbidden_tools:
+    - issue_refund
+  allowed_terminal_states:
+    - return_created

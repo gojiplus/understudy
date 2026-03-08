@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="understudy" tests="3" failures="1" errors="0">
+  <testcase name="adversarial_policy_bypass" classname="understudy" time="1.66">
+    <failure message="required_tool: lookup_order NOT called; required_tool: get_return_policy NOT called" type="assertion" />
+  </testcase>
+  <testcase name="return_eligible_backpack" classname="understudy" time="7.14" />
+  <testcase name="return_nonreturnable_earbuds" classname="understudy" time="7.98" />
+</testsuite>

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}understudy - Runs{% endblock %}
+
+{% block content %}
+<h1 class="mb-3">Test Runs</h1>
+
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-value">{{ summary.total_runs }}</div>
+        <div class="metric-label">Total Runs</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value" style="color: {% if summary.pass_rate >= 0.8 %}var(--success){% elif summary.pass_rate >= 0.5 %}var(--warning){% else %}var(--danger){% endif %}">
+            {{ "%.1f"|format(summary.pass_rate * 100) }}%
+        </div>
+        <div class="metric-label">Pass Rate</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ "%.1f"|format(summary.avg_turns) }}</div>
+        <div class="metric-label">Avg Turns</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Recent Runs</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Scene</th>
+                <th>Status</th>
+                <th>Terminal State</th>
+                <th>Turns</th>
+                <th>Tools</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in runs %}
+            <tr>
+                <td>
+                    <a href="/run/{{ run.run_id }}">{{ run.scene_id }}</a>
+                </td>
+                <td>
+                    {% if run.passed %}
+                    <span class="badge badge-success">PASS</span>
+                    {% else %}
+                    <span class="badge badge-danger">FAIL</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge badge-info">{{ run.terminal_state or "none" }}</span>
+                </td>
+                <td>{{ run.turn_count }}</td>
+                <td>{{ run.tools_called|length }}</td>
+                <td class="text-muted">{{ run.timestamp }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="text-muted">No runs found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if summary.tool_usage %}
+<div class="card">
+    <div class="card-header">Tool Usage</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Tool</th>
+                <th>Calls</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tool, count in summary.tool_usage.items() %}
+            <tr>
+                <td><code>{{ tool }}</code></td>
+                <td>{{ count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if summary.terminal_states %}
+<div class="card">
+    <div class="card-header">Terminal States</div>
+    <table>
+        <thead>
+            <tr>
+                <th>State</th>
+                <th>Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for state, count in summary.terminal_states.items() %}
+            <tr>
+                <td><span class="badge badge-info">{{ state }}</span></td>
+                <td>{{ count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,48 @@
+id: return_nonreturnable_earbuds
+description: >
+  Customer wants to return earbuds (non-returnable category).
+  Agent should deny and offer escalation.
+
+starting_prompt: "Hi, I need to return something I bought recently."
+conversation_plan: |
+  Goal: Return the wireless earbuds from order ORD-10027.
+  - If asked for order ID: provide ORD-10027
+  - If agent offers email lookup: provide alex@example.com
+  - If shown recent orders: pick the earbuds
+  Return reason: right earbud was dead on arrival.
+  If denied: push back once ("but it was defective!"), then accept
+  escalation if offered.
+
+persona: frustrated_but_cooperative
+max_turns: 20
+
+context:
+  customer:
+    name: Alex Chen
+    email: alex@example.com
+  orders:
+    ORD-10027:
+      items:
+        - name: Wireless Earbuds
+          sku: WE-400
+          category: personal_audio
+          price: 79.99
+      date: "2025-02-15"
+      status: delivered
+  policy:
+    non_returnable_categories:
+      - personal_audio
+      - perishables
+      - final_sale
+    escalation_allowed: true
+
+expectations:
+  required_tools:
+    - lookup_order
+    - get_return_policy
+  forbidden_tools:
+    - create_return
+    - issue_refund
+  allowed_terminal_states:
+    - return_denied_policy
+    - escalated_to_human

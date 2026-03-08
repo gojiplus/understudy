@@ -1,0 +1,20 @@
+# Build artifacts
+docs/_build/
+dist/
+*.egg-info/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Testing
+.pytest_cache/
+.coverage
+
+# understudy runs
+.understudy/

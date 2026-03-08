@@ -1,0 +1,67 @@
+[build-system]
+requires = ["uv_build>=0.7"]
+build-backend = "uv_build"
+
+[project]
+name = "understudy"
+version = "0.1.0"
+description = "Simulation and trace-based evaluation for agentic systems"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+    { name = "Gaurav Sood" },
+]
+keywords = ["agent", "evaluation", "simulation", "testing", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+adk = ["google-adk>=1.0"]
+judges = ["litellm>=1.50"]
+http = ["httpx>=0.27"]
+reports = ["jinja2>=3.0", "click>=8.0"]
+docs = [
+    "sphinx>=7.0",
+    "furo>=2024.0",
+    "myst-parser>=3.0",
+    "sphinx-autodoc-typehints>=2.0",
+]
+all = ["understudy[adk,judges,http,reports]"]
+dev = [
+    "understudy[all,docs]",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+understudy = "understudy.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/gojiplus/understudy"
+Documentation = "https://gojiplus.github.io/understudy"
+Repository = "https://github.com/gojiplus/understudy"
+Issues = "https://github.com/gojiplus/understudy/issues"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

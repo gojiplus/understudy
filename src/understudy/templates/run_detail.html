@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}understudy - {{ run_id }}{% endblock %}
+
+{% block content %}
+<h1 class="mb-3">
+    {{ metadata.scene_id }}
+    {% if metadata.passed %}
+    <span class="badge badge-success">PASS</span>
+    {% else %}
+    <span class="badge badge-danger">FAIL</span>
+    {% endif %}
+</h1>
+
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-value">{{ metadata.turn_count }}</div>
+        <div class="metric-label">Turns</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ metadata.tools_called|length }}</div>
+        <div class="metric-label">Tool Calls</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ metadata.agents_invoked|length }}</div>
+        <div class="metric-label">Agents</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">
+            <span class="badge badge-info">{{ metadata.terminal_state or "none" }}</span>
+        </div>
+        <div class="metric-label">Terminal State</div>
+    </div>
+</div>
+
+{% if scene %}
+<div class="card">
+    <div class="card-header">Scene</div>
+    <p><strong>Description:</strong> {{ scene.description }}</p>
+    <p><strong>Starting Prompt:</strong> {{ scene.starting_prompt }}</p>
+    <p><strong>Persona:</strong> {{ scene.persona.description }}</p>
+    <details class="mt-3">
+        <summary>Conversation Plan</summary>
+        <pre style="background: var(--bg-primary); padding: 15px; margin-top: 10px; border-radius: 4px;">{{ scene.conversation_plan }}</pre>
+    </details>
+</div>
+{% endif %}
+
+{% if check %}
+<div class="card">
+    <div class="card-header">
+        Expectations
+        {% if check.passed %}
+        <span class="badge badge-success">All Passed</span>
+        {% else %}
+        <span class="badge badge-danger">{{ check.checks|selectattr('passed', 'false')|list|length }} Failed</span>
+        {% endif %}
+    </div>
+    <ul class="check-list">
+        {% for c in check.checks %}
+        <li>
+            <span class="check-icon {% if c.passed %}check-pass{% else %}check-fail{% endif %}">
+                {% if c.passed %}&#10003;{% else %}&#10007;{% endif %}
+            </span>
+            <strong>{{ c.label }}:</strong> {{ c.detail }}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if judges %}
+<div class="card">
+    <div class="card-header">Judge Results</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Rubric</th>
+                <th>Score</th>
+                <th>Agreement</th>
+                <th>Reasoning</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for name, result in judges.items() %}
+            <tr>
+                <td>{{ name }}</td>
+                <td>
+                    {% if result.score == 1 %}
+                    <span class="badge badge-success">PASS</span>
+                    {% else %}
+                    <span class="badge badge-danger">FAIL</span>
+                    {% endif %}
+                </td>
+                <td>{{ "%.0f"|format((result.agreement_rate or 0) * 100) }}%</td>
+                <td class="text-muted">{{ result.reasoning or "-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if trace.agent_transfers %}
+<div class="card">
+    <div class="card-header">Agent Transfers</div>
+    {% for transfer in trace.agent_transfers %}
+    <div class="transfer">
+        <strong>{{ transfer.from_agent }}</strong> &rarr; <strong>{{ transfer.to_agent }}</strong>
+        {% if transfer.timestamp %}
+        <span class="text-muted" style="float: right;">{{ transfer.timestamp }}</span>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">Conversation Timeline</div>
+    <div class="conversation">
+        {% for turn in trace.turns %}
+        <div class="turn turn-{{ turn.role }}">
+            <div class="turn-role">
+                {% if turn.agent_name %}{{ turn.agent_name }}{% else %}{{ turn.role }}{% endif %}
+            </div>
+            <div class="turn-content">{{ turn.content }}</div>
+            {% for call in turn.tool_calls %}
+            <div class="tool-call">
+                <div class="tool-call-header">
+                    &#9654; {{ call.tool_name }}
+                    {% if call.agent_name %}<span class="text-muted">({{ call.agent_name }})</span>{% endif %}
+                </div>
+                <div class="tool-call-details collapsible">
+                    <div class="tool-call-args">
+                        <strong>Arguments:</strong>
+                        {{ call.arguments | tojson(indent=2) }}
+                    </div>
+                    {% if call.result %}
+                    <div class="tool-call-result mt-3">
+                        <strong>Result:</strong>
+                        {{ call.result | tojson(indent=2) if call.result is mapping else call.result }}
+                    </div>
+                    {% endif %}
+                    {% if call.error %}
+                    <div class="tool-call-result mt-3" style="color: var(--danger);">
+                        <strong>Error:</strong> {{ call.error }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if scene.context %}
+<div class="card">
+    <div class="card-header">Context (World State)</div>
+    <pre style="background: var(--bg-primary); padding: 15px; border-radius: 4px; overflow-x: auto;">{{ scene.context | tojson(indent=2) }}</pre>
+</div>
+{% endif %}
+
+<p class="mt-3">
+    <a href="/">&larr; Back to Runs</a>
+</p>
+{% endblock %}
