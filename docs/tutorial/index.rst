@@ -9,3 +9,4 @@ This tutorial covers the core concepts of understudy in depth.
    scenes
    assertions
    judges
+   http
