@@ -9,6 +9,22 @@
 
 Understudy is a scenario-driven testing framework for AI agents that simulates realistic multi-turn users, runs those scenes against an agent through a simple app adapter, records a structured execution trace of messages, tool calls, handoffs, and terminal states, and then evaluates behavior with deterministic checks, optional LLM judges, and run reports.
 
+## How It Works
+
+Testing with understudy is **4 steps**:
+
+1. **Wrap your agent** — Adapt your agent (ADK, LangGraph, HTTP) to understudy's interface
+2. **Mock your tools** — Register handlers that return test data instead of calling real services
+3. **Write scenes** — YAML files defining what the simulated user wants and what you expect
+4. **Run and assert** — Execute simulations, check traces, generate reports
+
+The key insight: **assert against the trace, not the prose**. Don't check what the agent said—check what it did (tool calls, terminal state).
+
+**See real examples:**
+- [Example scene](https://github.com/gojiplus/understudy/blob/main/example/scenes/return_eligible_backpack.yaml) — YAML defining a test scenario
+- [Test file](https://github.com/gojiplus/understudy/blob/main/example/test_returns.py) — pytest assertions against traces
+- [Sample report](https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/example/sample_report.html) — HTML output from `understudy report`
+
 ## Installation
 
 ```bash
