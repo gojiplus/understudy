@@ -90,26 +90,6 @@ class Trace(BaseModel):
         """Ordered list of tool names called."""
         return [c.tool_name for c in self.tool_calls]
 
-    @property
-    def events(self) -> list[dict[str, Any]]:
-        """State transitions, handoffs, escalations extracted from trace."""
-        evts = []
-        for turn in self.turns:
-            for call in turn.tool_calls:
-                if call.tool_name in (
-                    "escalate_to_human",
-                    "transfer_to_agent",
-                    "handoff",
-                ):
-                    evts.append(
-                        {
-                            "type": "escalation",
-                            "tool": call.tool_name,
-                            "args": call.arguments,
-                        }
-                    )
-        return evts
-
     def conversation_text(self) -> str:
         """Render the conversation as readable text (for judge input)."""
         lines = []

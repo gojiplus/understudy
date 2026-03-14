@@ -21,3 +21,7 @@ __pycache__/
 
 # Environment variables
 .env
+
+# Generated example files
+example/sample_report.html
+example/test-results/

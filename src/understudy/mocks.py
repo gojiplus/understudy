@@ -3,8 +3,6 @@
 from collections.abc import Callable
 from typing import Any
 
-ToolHandler = Callable[..., Any]
-
 
 class ToolError(Exception):
     """Raised by mock tools to signal an error to the agent."""
@@ -31,18 +29,18 @@ class MockToolkit:
     """
 
     def __init__(self):
-        self._handlers: dict[str, ToolHandler] = {}
+        self._handlers: dict[str, Callable[..., Any]] = {}
 
     def handle(self, tool_name: str) -> Callable:
         """Decorator to register a custom mock handler for a tool."""
 
-        def decorator(fn: ToolHandler) -> ToolHandler:
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             self._handlers[tool_name] = fn
             return fn
 
         return decorator
 
-    def get_handler(self, tool_name: str) -> ToolHandler | None:
+    def get_handler(self, tool_name: str) -> Callable[..., Any] | None:
         """Get the mock handler for a tool, or None if not mocked."""
         return self._handlers.get(tool_name)
 
