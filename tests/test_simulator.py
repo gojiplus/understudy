@@ -124,12 +124,14 @@ class TestFinishedSignal:
 
 class TestMultipleTurns:
     def test_multiple_turns_conversation(self):
-        backend = MockBackend([
-            "What's my order status?",
-            "The order number is ORD-12345",
-            "When will it arrive?",
-            "<finished>",
-        ])
+        backend = MockBackend(
+            [
+                "What's my order status?",
+                "The order number is ORD-12345",
+                "When will it arrive?",
+                "<finished>",
+            ]
+        )
         simulator = Simulator(
             backend=backend,
             conversation_plan="Ask about order, then shipping",

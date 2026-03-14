@@ -121,9 +121,7 @@ class TestClearCommand:
         assert "No runs found" in result.output
 
     def test_clear_with_confirm(self, runner, storage_with_runs):
-        result = runner.invoke(
-            main, ["clear", "--runs", str(storage_with_runs.path)], input="y\n"
-        )
+        result = runner.invoke(main, ["clear", "--runs", str(storage_with_runs.path)], input="y\n")
         assert result.exit_code == 0
         assert "Cleared 3 runs" in result.output
         assert len(storage_with_runs.list_runs()) == 0
