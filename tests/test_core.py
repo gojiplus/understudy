@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 from understudy import (
+    AgentResponse,
     AgentTransfer,
     Expectations,
     MockToolkit,
@@ -13,6 +14,7 @@ from understudy import (
     PersonaPreset,
     RunStorage,
     Scene,
+    Suite,
     ToolCall,
     ToolError,
     Trace,
@@ -599,3 +601,46 @@ class TestRunStorage:
         summary = storage.get_summary()
         assert summary["total_runs"] == 3
         assert summary["tool_usage"]["lookup_order"] == 3
+
+
+# --- Suite ---
+
+
+class MockAgentApp:
+    """A minimal mock implementation of AgentApp for testing."""
+
+    def __init__(self, response_content: str = "Hi there!", terminal_state: str = "done"):
+        self.response_content = response_content
+        self.terminal_state = terminal_state
+
+    def start(self, mocks=None):
+        pass
+
+    def send(self, message: str) -> AgentResponse:
+        return AgentResponse(content=self.response_content, terminal_state=self.terminal_state)
+
+    def stop(self):
+        pass
+
+
+class TestSuite:
+    def test_run_with_tags(self, tmp_path):
+        scene = Scene(
+            id="tag_test_scene",
+            starting_prompt="hello",
+            conversation_plan="greet",
+            persona=Persona(description="friendly"),
+            expectations=Expectations(),
+        )
+        suite = Suite([scene])
+        storage = RunStorage(path=tmp_path / "runs")
+
+        app = MockAgentApp()
+        tags = {"version": "v1", "model": "gpt-4"}
+        suite.run(app, storage=storage, tags=tags)
+
+        runs = storage.list_runs()
+        assert len(runs) == 1
+
+        run_data = storage.load(runs[0])
+        assert run_data["metadata"]["tags"] == {"version": "v1", "model": "gpt-4"}

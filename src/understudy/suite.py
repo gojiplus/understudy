@@ -127,6 +127,7 @@ class Suite:
         app: AgentApp,
         parallel: int = 1,
         storage: RunStorage | None = None,
+        tags: dict[str, str] | None = None,
         **run_kwargs: Any,
     ) -> SuiteResults:
         """Run all scenes and return aggregate results.
@@ -135,6 +136,7 @@ class Suite:
             app: The agent application to test.
             parallel: Number of scenes to run in parallel (default: 1).
             storage: Optional RunStorage to persist each scene run.
+            tags: Optional dict of tags for filtering and comparison.
             **run_kwargs: Additional kwargs passed to understudy.run().
 
         Returns:
@@ -144,13 +146,13 @@ class Suite:
 
         if parallel <= 1:
             for scene in self.scenes:
-                result = self._run_scene(app, scene, storage=storage, **run_kwargs)
+                result = self._run_scene(app, scene, storage=storage, tags=tags, **run_kwargs)
                 results.results.append(result)
         else:
             with ThreadPoolExecutor(max_workers=parallel) as executor:
                 futures = {
                     executor.submit(
-                        self._run_scene, app, scene, storage=storage, **run_kwargs
+                        self._run_scene, app, scene, storage=storage, tags=tags, **run_kwargs
                     ): scene
                     for scene in self.scenes
                 }
@@ -164,6 +166,7 @@ class Suite:
         app: AgentApp,
         scene: Scene,
         storage: RunStorage | None = None,
+        tags: dict[str, str] | None = None,
         **run_kwargs: Any,
     ) -> SceneResult:
         """Run a single scene and check expectations."""
@@ -176,7 +179,7 @@ class Suite:
                 check_result=result,
             )
             if storage:
-                storage.save(trace, scene, check_result=result)
+                storage.save(trace, scene, check_result=result, tags=tags)
             return scene_result
         except Exception as e:
             return SceneResult(

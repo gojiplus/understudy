@@ -33,6 +33,15 @@
     </div>
 </div>
 
+{% if metadata.tags %}
+<div class="mb-3">
+    <strong>Tags:</strong>
+    {% for key, value in metadata.tags.items() %}
+    <span class="badge" style="background: #e2e3e5; color: #383d41;">{{ key }}={{ value }}</span>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% if scene %}
 <div class="card">
     <div class="card-header">Scene</div>

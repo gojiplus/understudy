@@ -1,11 +1,14 @@
 """Runner: orchestrates the simulation loop."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from .mocks import MockToolkit
 from .models import Scene
 from .trace import ToolCall, Trace, Turn
+
+logger = logging.getLogger(__name__)
 
 
 class AgentApp(Protocol):
@@ -46,28 +49,32 @@ class AgentResponse:
         self.agent_transfers = agent_transfers or []
 
 
-class SimpleBackend:
-    """Simple LLM backend for the simulator using OpenAI-compatible API."""
+class LiteLLMBackend:
+    """LLM backend using litellm for unified provider access.
 
-    def __init__(self, model: str = "gpt-4o", api_key: str | None = None):
+    Supports any model string that litellm supports:
+    - OpenAI: "gpt-4o", "gpt-4o-mini"
+    - Anthropic: "claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"
+    - Google: "gemini/gemini-1.5-flash", "gemini/gemini-1.5-pro"
+    - And many more providers.
+
+    See https://docs.litellm.ai/docs/providers for full list.
+    """
+
+    def __init__(self, model: str = "gpt-4o"):
         self.model = model
-        self.api_key = api_key
 
     def generate(self, prompt: str) -> str:
-        try:
-            import openai
-        except ImportError as e:
-            raise ImportError(
-                "openai package required for SimpleBackend. Install with: pip install openai"
-            ) from e
-        client = openai.OpenAI(api_key=self.api_key)
-        response = client.chat.completions.create(
+        import litellm
+
+        response = litellm.completion(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=500,
             temperature=0.7,
         )
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return content or ""
 
 
 def run(
@@ -84,8 +91,8 @@ def run(
         scene: The scene (conversation fixture) to run.
         mocks: Optional mock toolkit for tool responses.
         simulator_backend: LLM backend for the user simulator. If None, uses
-            SimpleBackend with the specified model.
-        simulator_model: Model name for the default SimpleBackend.
+            LiteLLMBackend with the specified model.
+        simulator_model: Model name for the default LiteLLMBackend.
 
     Returns:
         A Trace recording everything that happened.
@@ -96,7 +103,7 @@ def run(
 
     # set up simulator
     if simulator_backend is None:
-        simulator_backend = SimpleBackend(model=simulator_model)
+        simulator_backend = LiteLLMBackend(model=simulator_model)
 
     simulator = Simulator(
         backend=simulator_backend,
@@ -110,6 +117,8 @@ def run(
         started_at=datetime.now(UTC),
     )
 
+    logger.info("Running scene: %s", scene.id)
+
     # start the agent
     app.start(mocks=mocks)
 
@@ -118,7 +127,8 @@ def run(
         history: list[dict[str, str]] = []
         user_message = scene.starting_prompt
 
-        for _turn_num in range(scene.max_turns):
+        for turn_num in range(scene.max_turns):
+            logger.debug("Turn %d", turn_num + 1)
             # record user turn
             trace.turns.append(
                 Turn(
@@ -151,6 +161,7 @@ def run(
             # check for terminal state
             if response.terminal_state:
                 trace.terminal_state = response.terminal_state
+                logger.info("Scene %s completed: %s", scene.id, response.terminal_state)
                 break
 
             # generate next user turn
@@ -163,6 +174,7 @@ def run(
         else:
             # max turns reached without resolution
             trace.terminal_state = "max_turns_reached"
+            logger.warning("Scene %s: max turns reached", scene.id)
 
     finally:
         app.stop()

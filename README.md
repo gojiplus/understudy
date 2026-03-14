@@ -104,27 +104,44 @@ Or with pytest (define `app` and `mocks` fixtures in conftest.py):
 pytest test_returns.py -v
 ```
 
+## Suites with Tags
+
+Run multiple scenes and tag runs for comparison:
+
+```python
+from understudy import Suite, RunStorage
+
+suite = Suite.from_directory("scenes/")
+storage = RunStorage()
+
+# Tag runs for later comparison
+results = suite.run(app, mocks=mocks, storage=storage, tags={"version": "v1"})
+print(f"{results.pass_count}/{len(results.results)} passed")
+```
+
 ## CLI Commands
 
-After running simulations, use the CLI to inspect results:
-
 ```bash
-# List all saved runs
+# List runs (shows tags)
 understudy list
 
-# Show aggregate metrics (pass rate, avg turns, tool usage, terminal states)
-understudy summary
-
-# Show details for a specific run
+# Show run details
 understudy show <run_id>
 
-# Generate static HTML report
-understudy report --output report.html
+# Aggregate metrics
+understudy summary
 
-# Start interactive report browser
+# Compare runs by tag
+understudy compare --tag version --before v1 --after v2
+
+# Generate HTML reports
+understudy report -o report.html
+understudy compare --tag version --before v1 --after v2 --html comparison.html
+
+# Interactive browser
 understudy serve --port 8080
 
-# Delete runs
+# Cleanup
 understudy delete <run_id>
 understudy clear
 ```

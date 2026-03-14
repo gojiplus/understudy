@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}understudy - Compare {{ before_label }} vs {{ after_label }}{% endblock %}
+
+{% block content %}
+<h1 class="mb-3">
+    Comparison: {{ before_label }} vs {{ after_label }}
+    <span class="text-muted" style="font-size: 0.6em; font-weight: normal;">tag: {{ tag }}</span>
+</h1>
+
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-value">{{ before_runs }} &rarr; {{ after_runs }}</div>
+        <div class="metric-label">Runs</div>
+        <div class="delta {% if runs_delta > 0 %}delta-positive{% elif runs_delta < 0 %}delta-negative{% endif %}">
+            {{ "%+d"|format(runs_delta) }}
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value" style="color: {% if after_pass_rate >= 0.8 %}var(--success){% elif after_pass_rate >= 0.5 %}var(--warning){% else %}var(--danger){% endif %}">
+            {{ "%.1f"|format(before_pass_rate * 100) }}% &rarr; {{ "%.1f"|format(after_pass_rate * 100) }}%
+        </div>
+        <div class="metric-label">Pass Rate</div>
+        <div class="delta {% if pass_rate_delta > 0 %}delta-positive{% elif pass_rate_delta < 0 %}delta-negative{% endif %}">
+            {{ "%+.1f"|format(pass_rate_delta * 100) }}%
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ "%.1f"|format(before_avg_turns) }} &rarr; {{ "%.1f"|format(after_avg_turns) }}</div>
+        <div class="metric-label">Avg Turns</div>
+        <div class="delta {% if avg_turns_delta < 0 %}delta-positive{% elif avg_turns_delta > 0 %}delta-negative{% endif %}">
+            {{ "%+.1f"|format(avg_turns_delta) }}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Terminal States</div>
+    <table>
+        <thead>
+            <tr>
+                <th>State</th>
+                <th style="text-align: right;">{{ before_label }}</th>
+                <th style="text-align: right;">{{ after_label }}</th>
+                <th style="text-align: right;">Delta</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for state in all_states %}
+            {% set before_count = terminal_states_before.get(state, 0) %}
+            {% set after_count = terminal_states_after.get(state, 0) %}
+            {% set delta = after_count - before_count %}
+            <tr>
+                <td><span class="badge badge-info">{{ state }}</span></td>
+                <td style="text-align: right;">{{ before_count }}</td>
+                <td style="text-align: right;">{{ after_count }}</td>
+                <td style="text-align: right;" class="{% if delta > 0 %}delta-positive{% elif delta < 0 %}delta-negative{% endif %}">
+                    {{ "%+d"|format(delta) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <div class="card-header">Tool Usage</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Tool</th>
+                <th style="text-align: right;">{{ before_label }}</th>
+                <th style="text-align: right;">{{ after_label }}</th>
+                <th style="text-align: right;">Delta</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tool in all_tools %}
+            {% set before_count = tool_usage_before.get(tool, 0) %}
+            {% set after_count = tool_usage_after.get(tool, 0) %}
+            {% set delta = after_count - before_count %}
+            <tr>
+                <td><code>{{ tool }}</code></td>
+                <td style="text-align: right;">{{ before_count }}</td>
+                <td style="text-align: right;">{{ after_count }}</td>
+                <td style="text-align: right;" class="{% if delta != 0 %}delta-neutral{% endif %}">
+                    {{ "%+d"|format(delta) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if per_scene %}
+<div class="card">
+    <div class="card-header">Per-Scene Breakdown</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Scene</th>
+                <th style="text-align: right;">{{ before_label }}</th>
+                <th style="text-align: right;">{{ after_label }}</th>
+                <th style="text-align: right;">Delta</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sc in per_scene %}
+            <tr>
+                <td>{{ sc.scene_id }}</td>
+                <td style="text-align: right;">
+                    {% if sc.before_total %}{{ sc.before_passed }}/{{ sc.before_total }}{% else %}-{% endif %}
+                </td>
+                <td style="text-align: right;">
+                    {% if sc.after_total %}{{ sc.after_passed }}/{{ sc.after_total }}{% else %}-{% endif %}
+                </td>
+                <td style="text-align: right;" class="{% if sc.pass_rate_delta > 0 %}delta-positive{% elif sc.pass_rate_delta < 0 %}delta-negative{% endif %}">
+                    {{ "%+.0f"|format(sc.pass_rate_delta * 100) }}%
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<p class="mt-3">
+    <a href="/">&larr; Back to Runs</a>
+</p>
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .delta {
+        font-size: 0.9rem;
+        margin-top: 5px;
+    }
+    .delta-positive {
+        color: var(--success);
+        font-weight: 600;
+    }
+    .delta-negative {
+        color: var(--danger);
+        font-weight: 600;
+    }
+    .delta-neutral {
+        color: var(--text-secondary);
+    }
+</style>
+{% endblock %}

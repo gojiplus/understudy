@@ -32,6 +32,7 @@
                 <th>Terminal State</th>
                 <th>Turns</th>
                 <th>Tools</th>
+                <th>Tags</th>
                 <th>Timestamp</th>
             </tr>
         </thead>
@@ -53,11 +54,16 @@
                 </td>
                 <td>{{ run.turn_count }}</td>
                 <td>{{ run.tools_called|length }}</td>
+                <td>
+                    {% for key, value in run.tags.items() %}
+                    <span class="badge" style="background: #e2e3e5; color: #383d41;">{{ key }}={{ value }}</span>
+                    {% endfor %}
+                </td>
                 <td class="text-muted">{{ run.timestamp }}</td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="6" class="text-muted">No runs found.</td>
+                <td colspan="7" class="text-muted">No runs found.</td>
             </tr>
             {% endfor %}
         </tbody>

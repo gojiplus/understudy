@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "understudy"
-version = "0.1.0"
+version = "0.3.0"
 description = "Simulation and trace-based evaluation for agentic systems"
 readme = "README.md"
 license = "MIT"
@@ -25,11 +25,11 @@ classifiers = [
 dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
+    "litellm>=1.50",
 ]
 
 [project.optional-dependencies]
-adk = ["google-adk>=1.0"]
-judges = ["litellm>=1.50"]
+adk = ["google-adk>=1.0", "python-dotenv>=1.0"]
 http = ["httpx>=0.27"]
 reports = ["jinja2>=3.0", "click>=8.0"]
 docs = [
@@ -38,11 +38,12 @@ docs = [
     "myst-parser>=3.0",
     "sphinx-autodoc-typehints>=2.0",
 ]
-all = ["understudy[adk,judges,http,reports]"]
+all = ["understudy[adk,http,reports]"]
 dev = [
     "understudy[all,docs]",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=4.0",
     "ruff>=0.4",
 ]
 

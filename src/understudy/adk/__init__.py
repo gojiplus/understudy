@@ -1,11 +1,29 @@
 """ADK adapter: wraps Google ADK agents for use with understudy."""
 
+import asyncio
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from ..mocks import MockToolkit
 from ..runner import AgentApp, AgentResponse
 from ..trace import AgentTransfer, ToolCall
+
+logger = logging.getLogger(__name__)
+
+
+def _load_dotenv():
+    """Load environment variables from .env file if present."""
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+
+
+# Load .env on module import
+_load_dotenv()
 
 
 def _create_mock_callback(mocks: MockToolkit | None):
@@ -57,12 +75,17 @@ class ADKApp(AgentApp):
         self.session_id = session_id
         self._runner = None
         self._session = None
+        self._session_service = None
         self._mocks: MockToolkit | None = None
         self._current_agent: str | None = None
         self._agent_transfers: list[AgentTransfer] = []
 
     def start(self, mocks: MockToolkit | None = None) -> None:
         """Initialize the ADK session."""
+        asyncio.run(self._start_async(mocks))
+
+    async def _start_async(self, mocks: MockToolkit | None = None) -> None:
+        """Async implementation of start."""
         try:
             from google.adk import Runner
             from google.adk.sessions import InMemorySessionService
@@ -72,34 +95,48 @@ class ADKApp(AgentApp):
             ) from e
         import uuid
 
+        # Suppress verbose Google SDK warnings
+        logging.getLogger("google.adk").setLevel(logging.WARNING)
+        logging.getLogger("google.genai").setLevel(logging.ERROR)
+
         self._mocks = mocks
         self._current_agent = getattr(self.agent, "name", None)
         self._agent_transfers = []
         self._session_id = self.session_id or str(uuid.uuid4())
 
-        session_service = InMemorySessionService()
+        logger.debug("Starting ADK session %s for agent %s", self._session_id, self._current_agent)
+
+        self._session_service = InMemorySessionService()
         if mocks:
             self.agent.before_tool_callback = _create_mock_callback(mocks)
+            logger.debug("Registered %d mock handlers", len(mocks.available_tools))
 
         self._runner = Runner(
             agent=self.agent,
             app_name="understudy_test",
-            session_service=session_service,
+            session_service=self._session_service,
         )
-        self._session = session_service.create_session_sync(
+        self._session = await self._session_service.create_session(
             app_name="understudy_test",
             user_id="understudy_user",
             session_id=self._session_id,
         )
+        logger.debug("ADK session started")
 
     def send(self, message: str) -> AgentResponse:
         """Send a user message to the ADK agent and capture the response."""
+        return asyncio.run(self._send_async(message))
+
+    async def _send_async(self, message: str) -> AgentResponse:
+        """Async implementation of send."""
         try:
             from google.genai import types
         except ImportError as e:
             raise ImportError(
                 "google-adk package required. Install with: pip install understudy[adk]"
             ) from e
+
+        logger.debug("Sending message: %s", message[:100])
 
         user_content = types.Content(
             role="user",
@@ -111,7 +148,7 @@ class ADKApp(AgentApp):
         terminal_state: str | None = None
         current_agent_name = self._current_agent
 
-        for event in self._runner.run(
+        async for event in self._runner.run_async(
             user_id="understudy_user",
             session_id=self._session.id,
             new_message=user_content,
@@ -155,6 +192,7 @@ class ADKApp(AgentApp):
                     agent_name=current_agent_name,
                 )
                 tool_calls.append(call)
+                logger.debug("Tool call: %s", fc.name)
 
             # capture function responses and update tool call results
             for fr in event.get_function_responses():
@@ -175,6 +213,7 @@ class ADKApp(AgentApp):
                         if "TERMINAL_STATE:" in text:
                             state = text.split("TERMINAL_STATE:")[-1].strip()
                             terminal_state = state.split()[0].strip()
+                            logger.debug("Terminal state: %s", terminal_state)
 
         self._current_agent = current_agent_name
 
@@ -191,4 +230,5 @@ class ADKApp(AgentApp):
         """Clean up the ADK session."""
         self._runner = None
         self._session = None
+        self._session_service = None
         self._mocks = None

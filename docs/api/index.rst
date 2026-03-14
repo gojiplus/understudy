@@ -119,6 +119,26 @@ Pre-built rubrics for common evaluation dimensions:
 
    Agent followed system prompt instructions.
 
+Storage
+-------
+
+.. autoclass:: understudy.RunStorage
+   :members:
+   :undoc-members:
+
+Compare
+-------
+
+.. autofunction:: understudy.compare_runs
+
+.. autoclass:: understudy.ComparisonResult
+   :members:
+   :undoc-members:
+
+.. autoclass:: understudy.SceneComparison
+   :members:
+   :undoc-members:
+
 Mocks
 -----
 

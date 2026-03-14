@@ -106,3 +106,31 @@ Run all scenes in a directory:
    results = suite.run(app, parallel=4)
    results.to_junit_xml("test-results/understudy.xml")
    assert results.all_passed
+
+Tagging and Comparing Runs
+--------------------------
+
+Tag runs for later comparison (e.g., comparing model versions):
+
+.. code-block:: python
+
+   from understudy import Suite, RunStorage
+
+   storage = RunStorage()
+   suite = Suite.from_directory("scenes/")
+
+   # Tag runs with version
+   suite.run(app, storage=storage, tags={"version": "v1"})
+   suite.run(app, storage=storage, tags={"version": "v2"})
+
+Then compare via CLI:
+
+.. code-block:: bash
+
+   # CLI comparison
+   understudy compare --tag version --before v1 --after v2
+
+   # HTML report
+   understudy compare --tag version --before v1 --after v2 --html comparison.html
+
+The comparison shows per-scene pass rates when running multiple times.

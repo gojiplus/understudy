@@ -74,6 +74,7 @@ class ReportGenerator:
                     "terminal_state": meta.get("terminal_state"),
                     "turn_count": meta.get("turn_count", 0),
                     "tools_called": meta.get("tools_called", []),
+                    "tags": meta.get("tags", {}),
                     "timestamp": meta.get("timestamp", ""),
                 }
             )
@@ -97,6 +98,68 @@ class ReportGenerator:
 
         template = env.get_template("metrics.html")
         return template.render(summary=summary, judge_agreement=judge_agreement)
+
+    def generate_comparison_report(
+        self,
+        tag: str,
+        before_value: str,
+        after_value: str,
+        before_label: str | None = None,
+        after_label: str | None = None,
+    ) -> str:
+        """Generate comparison HTML between two tag values.
+
+        Args:
+            tag: The tag key to compare on.
+            before_value: The baseline tag value.
+            after_value: The candidate tag value.
+            before_label: Display label for baseline (defaults to before_value).
+            after_label: Display label for candidate (defaults to after_value).
+
+        Returns:
+            HTML content as a string.
+        """
+        from .compare import compare_runs
+
+        env = self._get_env()
+        result = compare_runs(
+            self.storage,
+            tag=tag,
+            before_value=before_value,
+            after_value=after_value,
+            before_label=before_label,
+            after_label=after_label,
+        )
+
+        all_states = sorted(
+            set(result.terminal_states_before.keys()) | set(result.terminal_states_after.keys())
+        )
+        all_tools = sorted(
+            set(result.tool_usage_before.keys()) | set(result.tool_usage_after.keys())
+        )
+
+        template = env.get_template("comparison.html")
+        return template.render(
+            tag=result.tag,
+            before_label=result.before_label,
+            after_label=result.after_label,
+            before_runs=result.before_runs,
+            after_runs=result.after_runs,
+            runs_delta=result.after_runs - result.before_runs,
+            before_pass_rate=result.before_pass_rate,
+            after_pass_rate=result.after_pass_rate,
+            pass_rate_delta=result.pass_rate_delta,
+            before_avg_turns=result.before_avg_turns,
+            after_avg_turns=result.after_avg_turns,
+            avg_turns_delta=result.avg_turns_delta,
+            terminal_states_before=result.terminal_states_before,
+            terminal_states_after=result.terminal_states_after,
+            all_states=all_states,
+            tool_usage_before=result.tool_usage_before,
+            tool_usage_after=result.tool_usage_after,
+            all_tools=all_tools,
+            per_scene=result.per_scene,
+        )
 
     def _compute_judge_agreement(self, runs: list[dict]) -> dict[str, dict[str, float]]:
         """Compute average agreement rates and pass rates for each judge rubric."""
@@ -155,12 +218,34 @@ class ReportGenerator:
 
         class ReportHandler(BaseHTTPRequestHandler):
             def do_GET(self):
-                path = self.path
+                from urllib.parse import parse_qs, urlparse
+
+                parsed = urlparse(self.path)
+                path = parsed.path
+                query = parse_qs(parsed.query)
 
                 if path == "/" or path == "/index.html":
                     content = generator.generate_index()
                 elif path == "/metrics":
                     content = generator.generate_metrics_report()
+                elif path == "/compare":
+                    tag = query.get("tag", [None])[0]
+                    before = query.get("before", [None])[0]
+                    after = query.get("after", [None])[0]
+                    if not all([tag, before, after]):
+                        self.send_error(400, "Missing required params: tag, before, after")
+                        return
+                    try:
+                        content = generator.generate_comparison_report(
+                            tag=tag,
+                            before_value=before,
+                            after_value=after,
+                            before_label=query.get("before_label", [None])[0],
+                            after_label=query.get("after_label", [None])[0],
+                        )
+                    except ValueError as e:
+                        self.send_error(400, str(e))
+                        return
                 elif path.startswith("/run/"):
                     run_id = path[5:]
                     try:

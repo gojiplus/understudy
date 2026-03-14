@@ -1,6 +1,7 @@
 """Storage: persist simulation runs to disk."""
 
 import json
+import secrets
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,7 @@ class RunStorage:
         scene: Scene,
         judges: dict[str, Any] | None = None,
         check_result: Any | None = None,
+        tags: dict[str, str] | None = None,
     ) -> str:
         """Save a run and return the run_id.
 
@@ -33,12 +35,14 @@ class RunStorage:
             scene: The scene that was run.
             judges: Optional dict of judge results.
             check_result: Optional CheckResult from expectations validation.
+            tags: Optional dict of tags for filtering and comparison.
 
         Returns:
             The run_id (can be used to load the run later).
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_id = f"{trace.scene_id}_{timestamp}"
+        suffix = secrets.token_hex(3)
+        run_id = f"{trace.scene_id}_{timestamp}_{suffix}"
         run_dir = self.path / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -75,6 +79,7 @@ class RunStorage:
             "turn_count": trace.turn_count,
             "tools_called": trace.call_sequence(),
             "agents_invoked": trace.agents_invoked(),
+            "tags": tags or {},
         }
         (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
