@@ -1,7 +1,7 @@
 ## understudy: Scenario Testing for AI Agents
 
 [![PyPI version](https://badge.fury.io/py/understudy.svg)](https://badge.fury.io/py/understudy)
-[![Downloads]([![PyPI Downloads](https://static.pepy.tech/personalized-badge/understudy?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/understudy)](https://pepy.tech/project/understudy)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/understudy?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/project/understudy)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Documentation](https://github.com/gojiplus/understudy/actions/workflows/docs.yml/badge.svg)](https://gojiplus.github.io/understudy/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
