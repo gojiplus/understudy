@@ -128,6 +128,7 @@ class Suite:
         parallel: int = 1,
         storage: RunStorage | None = None,
         tags: dict[str, str] | None = None,
+        n_sims: int = 1,
         **run_kwargs: Any,
     ) -> SuiteResults:
         """Run all scenes and return aggregate results.
@@ -137,6 +138,7 @@ class Suite:
             parallel: Number of scenes to run in parallel (default: 1).
             storage: Optional RunStorage to persist each scene run.
             tags: Optional dict of tags for filtering and comparison.
+            n_sims: Number of simulations per scene (default: 1).
             **run_kwargs: Additional kwargs passed to understudy.run().
 
         Returns:
@@ -144,17 +146,30 @@ class Suite:
         """
         results = SuiteResults()
 
+        sim_tasks = []
+        for scene in self.scenes:
+            for sim_index in range(n_sims):
+                sim_tasks.append((scene, sim_index))
+
         if parallel <= 1:
-            for scene in self.scenes:
-                result = self._run_scene(app, scene, storage=storage, tags=tags, **run_kwargs)
+            for scene, sim_index in sim_tasks:
+                result = self._run_scene(
+                    app, scene, storage=storage, tags=tags, sim_index=sim_index, **run_kwargs
+                )
                 results.results.append(result)
         else:
             with ThreadPoolExecutor(max_workers=parallel) as executor:
                 futures = {
                     executor.submit(
-                        self._run_scene, app, scene, storage=storage, tags=tags, **run_kwargs
-                    ): scene
-                    for scene in self.scenes
+                        self._run_scene,
+                        app,
+                        scene,
+                        storage=storage,
+                        tags=tags,
+                        sim_index=sim_index,
+                        **run_kwargs,
+                    ): (scene, sim_index)
+                    for scene, sim_index in sim_tasks
                 }
                 for future in as_completed(futures):
                     results.results.append(future.result())
@@ -167,14 +182,16 @@ class Suite:
         scene: Scene,
         storage: RunStorage | None = None,
         tags: dict[str, str] | None = None,
+        sim_index: int = 0,
         **run_kwargs: Any,
     ) -> SceneResult:
         """Run a single scene and check expectations."""
+        scene_id_with_index = f"{scene.id}" if sim_index == 0 else f"{scene.id}_{sim_index}"
         try:
             trace = run(app, scene, **run_kwargs)
             result = check(trace, scene.expectations)
             scene_result = SceneResult(
-                scene_id=scene.id,
+                scene_id=scene_id_with_index,
                 trace=trace,
                 check_result=result,
             )
@@ -183,7 +200,7 @@ class Suite:
             return scene_result
         except Exception as e:
             return SceneResult(
-                scene_id=scene.id,
+                scene_id=scene_id_with_index,
                 trace=Trace(scene_id=scene.id),
                 check_result=CheckResult(),
                 error=str(e),

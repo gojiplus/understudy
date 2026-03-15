@@ -42,7 +42,6 @@ A Scene defines a test scenario with:
        expectations=Expectations(
            required_tools=["lookup_order", "get_return_policy"],
            forbidden_tools=["create_return"],
-           allowed_terminal_states=["return_denied_policy", "escalated_to_human"],
        ),
    )
 
@@ -76,7 +75,6 @@ Assert against the trace (what happened), not the prose:
        assert trace.called("lookup_order")
        assert trace.called("get_return_policy")
        assert not trace.called("create_return")
-       assert trace.terminal_state in {"return_denied_policy", "escalated_to_human"}
 
 Using LLM Judges
 ----------------

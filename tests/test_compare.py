@@ -38,7 +38,7 @@ def _make_scene(scene_id: str) -> Scene:
         starting_prompt="hi",
         conversation_plan="test",
         persona=Persona(description="test"),
-        expectations=Expectations(allowed_terminal_states=["done"]),
+        expectations=Expectations(),
     )
 
 
@@ -224,23 +224,23 @@ class TestCompareRuns:
     def test_pass_rate_delta(self, tmp_path):
         storage = RunStorage(path=tmp_path / "runs")
 
-        trace1 = _make_trace("scene_1", ["tool_a"], terminal_state="done")
+        trace1 = _make_trace("scene_1", ["tool_a"])
         scene1 = _make_scene("scene_1")
         check1 = check(trace1, scene1.expectations)
         storage.save(trace1, scene1, check_result=check1, tags={"version": "before"})
 
-        trace2 = _make_trace("scene_2", ["tool_a"], terminal_state="failed")
+        trace2 = _make_trace("scene_2", ["bad_tool"])
         scene2 = _make_scene("scene_2")
-        scene2.expectations = Expectations(allowed_terminal_states=["done"])
+        scene2.expectations = Expectations(forbidden_tools=["bad_tool"])
         check2 = check(trace2, scene2.expectations)
         storage.save(trace2, scene2, check_result=check2, tags={"version": "before"})
 
-        trace3 = _make_trace("scene_3", ["tool_a"], terminal_state="done")
+        trace3 = _make_trace("scene_3", ["tool_a"])
         scene3 = _make_scene("scene_3")
         check3 = check(trace3, scene3.expectations)
         storage.save(trace3, scene3, check_result=check3, tags={"version": "after"})
 
-        trace4 = _make_trace("scene_4", ["tool_a"], terminal_state="done")
+        trace4 = _make_trace("scene_4", ["tool_a"])
         scene4 = _make_scene("scene_4")
         check4 = check(trace4, scene4.expectations)
         storage.save(trace4, scene4, check_result=check4, tags={"version": "after"})

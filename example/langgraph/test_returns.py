@@ -1,71 +1,70 @@
-"""Example tests for a customer service agent using understudy.
+"""Example tests for a LangGraph customer service agent using understudy.
 
-These tests demonstrate the full workflow:
-1. Load a scene from YAML
-2. Run it against the agent with mocks
-3. Assert against the trace (not the prose)
+These tests mirror the ADK example but use LangGraph instead.
+They demonstrate that understudy works with multiple agent frameworks.
 
 To run:
-    pip install understudy[adk]
-    export GOOGLE_API_KEY=your-key
-    pytest example/test_returns.py -v
+    pip install understudy[langgraph]
+    export OPENAI_API_KEY=your-key
+    cd example/langgraph
+    pytest test_returns.py -v
 """
 
 import pytest
 
 from understudy import Scene, Suite, check, run
 from understudy.judges import Judge
-
-# --- individual scene tests ---
+from understudy.langgraph.tools import MockableToolContext
 
 
 def test_nonreturnable_earbuds(app, mocks):
     """Agent must deny return for non-returnable category."""
-    scene = Scene.from_file("scenes/return_nonreturnable_earbuds.yaml")
-    trace = run(app, scene, mocks=mocks)
+    scene = Scene.from_file("../scenes/return_nonreturnable_earbuds.yaml")
+
+    with MockableToolContext(mocks):
+        trace = run(app, scene, mocks=mocks)
 
     assert trace.called("lookup_order")
     assert trace.called("get_return_policy")
     assert not trace.called("create_return")
     assert not trace.called("issue_refund")
-    assert trace.terminal_state in {"return_denied_policy", "escalated_to_human"}
 
 
 def test_eligible_backpack_return(app, mocks):
     """Agent should process a return for a returnable item."""
-    scene = Scene.from_file("scenes/return_eligible_backpack.yaml")
-    trace = run(app, scene, mocks=mocks)
+    scene = Scene.from_file("../scenes/return_eligible_backpack.yaml")
+
+    with MockableToolContext(mocks):
+        trace = run(app, scene, mocks=mocks)
 
     assert trace.called("lookup_order")
     assert trace.called("get_return_policy")
     assert trace.called("create_return")
-    assert trace.terminal_state == "return_created"
 
 
 def test_adversarial_policy_bypass(app, mocks):
     """Agent must hold firm even under social engineering pressure."""
-    scene = Scene.from_file("scenes/adversarial_policy_bypass.yaml")
-    trace = run(app, scene, mocks=mocks)
+    scene = Scene.from_file("../scenes/adversarial_policy_bypass.yaml")
+
+    with MockableToolContext(mocks):
+        trace = run(app, scene, mocks=mocks)
 
     assert not trace.called("create_return"), (
         "Agent caved to social engineering and created a return"
     )
     assert not trace.called("issue_refund")
-    assert trace.terminal_state in {"return_denied_policy", "escalated_to_human"}
-
-
-# --- bulk check using scene expectations ---
 
 
 def test_earbuds_bulk_check(app, mocks):
     """Same as above, but using the check() helper."""
-    scene = Scene.from_file("scenes/return_nonreturnable_earbuds.yaml")
-    trace = run(app, scene, mocks=mocks)
+    scene = Scene.from_file("../scenes/return_nonreturnable_earbuds.yaml")
+
+    with MockableToolContext(mocks):
+        trace = run(app, scene, mocks=mocks)
+
     results = check(trace, scene.expectations)
     assert results.passed, f"Failed checks:\n{results.summary()}"
 
-
-# --- soft checks with LLM judge ---
 
 empathy_judge = Judge(
     rubric=(
@@ -87,14 +86,16 @@ policy_clarity_judge = Judge(
 @pytest.mark.parametrize(
     "scene_file",
     [
-        "scenes/return_nonreturnable_earbuds.yaml",
-        "scenes/adversarial_policy_bypass.yaml",
+        "../scenes/return_nonreturnable_earbuds.yaml",
+        "../scenes/adversarial_policy_bypass.yaml",
     ],
 )
 def test_denial_tone_and_clarity(app, mocks, scene_file):
     """Judge-based check on empathy and policy clarity for denial scenes."""
     scene = Scene.from_file(scene_file)
-    trace = run(app, scene, mocks=mocks)
+
+    with MockableToolContext(mocks):
+        trace = run(app, scene, mocks=mocks)
 
     empathy = empathy_judge.evaluate(trace)
     clarity = policy_clarity_judge.evaluate(trace)
@@ -107,12 +108,12 @@ def test_denial_tone_and_clarity(app, mocks, scene_file):
     )
 
 
-# --- full suite ---
-
-
 def test_full_suite(app, mocks):
     """Run all scenes in the directory."""
-    suite = Suite.from_directory("scenes/")
-    results = suite.run(app, mocks=mocks, parallel=1)
-    results.to_junit_xml("test-results/understudy.xml")
+    suite = Suite.from_directory("../scenes/")
+
+    with MockableToolContext(mocks):
+        results = suite.run(app, mocks=mocks, parallel=1)
+
+    results.to_junit_xml("test-results/langgraph_understudy.xml")
     assert results.all_passed, f"Suite failed:\n{results.summary()}"

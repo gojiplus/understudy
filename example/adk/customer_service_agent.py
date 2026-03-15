@@ -86,15 +86,6 @@ RULES:
 - If the customer is unhappy with a denial, offer to escalate to a
   human agent.
 - Be empathetic but firm on policy.
-
-When a conversation reaches a resolution, emit the terminal state on its own line:
-TERMINAL_STATE: <state>
-
-Valid states:
-- return_created: a return was successfully created
-- return_denied_policy: return denied due to policy
-- escalated_to_human: conversation handed to human agent
-- order_info_provided: customer just wanted order status
 """,
     tools=[
         FunctionTool(lookup_order),

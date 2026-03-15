@@ -21,7 +21,7 @@ def storage_with_runs(tmp_path):
             starting_prompt="hello",
             conversation_plan="greet",
             persona=Persona(description="friendly"),
-            expectations=Expectations(allowed_terminal_states=["done"]),
+            expectations=Expectations(),
         )
         check_result = check(trace, scene.expectations)
         storage.save(trace, scene, check_result=check_result)
@@ -110,7 +110,7 @@ class TestComparisonReport:
                     starting_prompt="hi",
                     conversation_plan="test",
                     persona=Persona(description="test"),
-                    expectations=Expectations(allowed_terminal_states=["done"]),
+                    expectations=Expectations(),
                 )
                 check_result = check(trace, scene.expectations)
                 storage.save(trace, scene, check_result=check_result, tags={"version": version})

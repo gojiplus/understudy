@@ -40,5 +40,7 @@ expectations:
     - create_return
   forbidden_tools:
     - issue_refund
-  allowed_terminal_states:
-    - return_created
+  expected_resolution: completed
+  metrics:
+    - efficiency
+    - tool_trajectory

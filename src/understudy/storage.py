@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .check import CheckResult
 from .models import Scene
 from .trace import Trace
 
@@ -209,3 +210,205 @@ class RunStorage:
             "terminal_states": terminal_counts,
             "agents": agent_counts,
         }
+
+
+class TraceStorage:
+    """Persist simulation traces to disk (without evaluation results).
+
+    Used by simulate/simulate_batch for simulation-only workflows.
+    """
+
+    def __init__(self, path: Path | str = ".understudy/traces"):
+        self.path = Path(path)
+
+    def save(
+        self,
+        trace: Trace,
+        scene: Scene,
+        sim_index: int = 0,
+        tags: dict[str, str] | None = None,
+    ) -> str:
+        """Save a trace and return the trace_id.
+
+        Args:
+            trace: The execution trace.
+            scene: The scene that was run.
+            sim_index: Index of this simulation (for n_sims > 1).
+            tags: Optional metadata tags.
+
+        Returns:
+            The trace_id (can be used to load the trace later).
+        """
+        self.path.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        trace_id = f"{trace.scene_id}_{sim_index}_{timestamp}"
+        trace_file = self.path / f"{trace_id}.json"
+
+        data = {
+            "trace": json.loads(trace.model_dump_json()),
+            "scene": json.loads(scene.model_dump_json()),
+            "metadata": {
+                "trace_id": trace_id,
+                "scene_id": trace.scene_id,
+                "sim_index": sim_index,
+                "timestamp": datetime.now().isoformat(),
+                "tags": tags or {},
+            },
+        }
+
+        trace_file.write_text(json.dumps(data, indent=2, default=str))
+        return trace_id
+
+    def load(self, trace_id: str) -> dict[str, Any]:
+        """Load a trace by its ID.
+
+        Args:
+            trace_id: The trace identifier.
+
+        Returns:
+            Dict containing trace, scene, and metadata.
+        """
+        trace_file = self.path / f"{trace_id}.json"
+        if not trace_file.exists():
+            raise FileNotFoundError(f"Trace not found: {trace_id}")
+
+        data = json.loads(trace_file.read_text())
+        data["trace"] = Trace.model_validate(data["trace"])
+        data["scene"] = Scene.model_validate(data["scene"])
+        return data
+
+    def load_trace(self, trace_id: str) -> Trace:
+        """Load just the trace object by its ID."""
+        return self.load(trace_id)["trace"]
+
+    def list_traces(self) -> list[str]:
+        """List all trace IDs in storage."""
+        if not self.path.exists():
+            return []
+
+        traces = []
+        for f in self.path.iterdir():
+            if f.suffix == ".json" and f.is_file():
+                traces.append(f.stem)
+
+        return sorted(traces, reverse=True)
+
+    def load_all(self) -> list[dict[str, Any]]:
+        """Load all traces."""
+        return [self.load(trace_id) for trace_id in self.list_traces()]
+
+    def delete(self, trace_id: str) -> None:
+        """Delete a trace by its ID."""
+        trace_file = self.path / f"{trace_id}.json"
+        if trace_file.exists():
+            trace_file.unlink()
+
+    def clear(self) -> None:
+        """Delete all traces."""
+        if self.path.exists():
+            import shutil
+
+            shutil.rmtree(self.path)
+            self.path.mkdir(parents=True, exist_ok=True)
+
+
+class EvaluationStorage:
+    """Persist evaluation results to disk.
+
+    Used by evaluate/evaluate_batch for storing evaluation results.
+    """
+
+    def __init__(self, path: Path | str = ".understudy/results"):
+        self.path = Path(path)
+
+    def save(
+        self,
+        trace_id: str,
+        check_result: CheckResult,
+        judges: dict[str, Any] | None = None,
+    ) -> str:
+        """Save evaluation results.
+
+        Args:
+            trace_id: The trace that was evaluated.
+            check_result: The evaluation result.
+            judges: Optional judge results.
+
+        Returns:
+            The result filename.
+        """
+        self.path.mkdir(parents=True, exist_ok=True)
+
+        result_id = f"{trace_id}_eval"
+        result_file = self.path / f"{result_id}.json"
+
+        data = {
+            "trace_id": trace_id,
+            "passed": check_result.passed,
+            "checks": [
+                {"label": c.label, "passed": c.passed, "detail": c.detail}
+                for c in check_result.checks
+            ],
+            "metrics": {
+                name: {
+                    "name": m.name,
+                    "value": m.value,
+                    "passed": m.passed,
+                    "detail": m.detail,
+                }
+                for name, m in check_result.metrics.items()
+            },
+        }
+
+        if judges:
+            judges_data = {}
+            for name, result in judges.items():
+                if hasattr(result, "model_dump"):
+                    judges_data[name] = result.model_dump()
+                elif hasattr(result, "__dict__"):
+                    judges_data[name] = result.__dict__
+                else:
+                    judges_data[name] = result
+            data["judges"] = judges_data
+
+        result_file.write_text(json.dumps(data, indent=2, default=str))
+        return result_id
+
+    def load(self, result_id: str) -> dict[str, Any]:
+        """Load evaluation results by ID."""
+        result_file = self.path / f"{result_id}.json"
+        if not result_file.exists():
+            raise FileNotFoundError(f"Result not found: {result_id}")
+
+        return json.loads(result_file.read_text())
+
+    def list_results(self) -> list[str]:
+        """List all result IDs in storage."""
+        if not self.path.exists():
+            return []
+
+        results = []
+        for f in self.path.iterdir():
+            if f.suffix == ".json" and f.is_file():
+                results.append(f.stem)
+
+        return sorted(results, reverse=True)
+
+    def load_all(self) -> list[dict[str, Any]]:
+        """Load all results."""
+        return [self.load(result_id) for result_id in self.list_results()]
+
+    def delete(self, result_id: str) -> None:
+        """Delete a result by its ID."""
+        result_file = self.path / f"{result_id}.json"
+        if result_file.exists():
+            result_file.unlink()
+
+    def clear(self) -> None:
+        """Delete all results."""
+        if self.path.exists():
+            import shutil
+
+            shutil.rmtree(self.path)
+            self.path.mkdir(parents=True, exist_ok=True)

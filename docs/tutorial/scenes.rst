@@ -53,7 +53,6 @@ Creating Scenes in Python
        },
        expectations=Expectations(
            required_tools=["lookup_order"],
-           allowed_terminal_states=["order_info_provided"],
        ),
    )
 
@@ -85,8 +84,6 @@ YAML is often more readable for scene definitions:
    expectations:
      required_tools:
        - lookup_order
-     allowed_terminal_states:
-       - order_info_provided
 
 Load with:
 

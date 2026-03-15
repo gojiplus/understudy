@@ -147,6 +147,9 @@ class ADKApp(AgentApp):
         agent_text_parts: list[str] = []
         terminal_state: str | None = None
         current_agent_name = self._current_agent
+        input_tokens = 0
+        output_tokens = 0
+        thinking_tokens = 0
 
         async for event in self._runner.run_async(
             user_id="understudy_user",
@@ -208,23 +211,31 @@ class ADKApp(AgentApp):
                     if text:
                         agent_text_parts.append(text)
 
-                        # check for terminal state markers
-                        # convention: agent emits "TERMINAL_STATE: <state>"
-                        if "TERMINAL_STATE:" in text:
-                            state = text.split("TERMINAL_STATE:")[-1].strip()
-                            terminal_state = state.split()[0].strip()
-                            logger.debug("Terminal state: %s", terminal_state)
+            # capture token usage from usage_metadata
+            if hasattr(event, "usage_metadata") and event.usage_metadata:
+                usage = event.usage_metadata
+                input_tokens += getattr(usage, "prompt_token_count", 0) or 0
+                output_tokens += getattr(usage, "candidates_token_count", 0) or 0
+                thinking_tokens += getattr(usage, "thoughts_token_count", 0) or 0
 
         self._current_agent = current_agent_name
 
-        response = AgentResponse(
+        # capture state snapshot from session
+        state_snapshot = None
+        if self._session and hasattr(self._session, "state"):
+            state_snapshot = dict(self._session.state) if self._session.state else None
+
+        return AgentResponse(
             content=" ".join(agent_text_parts),
             tool_calls=tool_calls,
             terminal_state=terminal_state,
+            agent_name=current_agent_name,
+            agent_transfers=list(self._agent_transfers),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            thinking_tokens=thinking_tokens,
+            state_snapshot=state_snapshot,
         )
-        response.agent_name = current_agent_name
-        response.agent_transfers = list(self._agent_transfers)
-        return response
 
     def stop(self) -> None:
         """Clean up the ADK session."""

@@ -1,13 +1,45 @@
 """CLI: command-line interface for understudy."""
 
+import importlib
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 
 from .compare import compare_runs
 from .reports import ReportGenerator
 from .storage import RunStorage
+
+
+def import_object(import_path: str) -> Any:
+    """Import a Python object from an import path.
+
+    Args:
+        import_path: Import path in the format "module:attribute" or "module.submodule:attribute".
+
+    Returns:
+        The imported object.
+
+    Raises:
+        click.ClickException: If the import path is invalid or the object cannot be found.
+    """
+    if ":" not in import_path:
+        raise click.ClickException(
+            f"Invalid import path '{import_path}'. Expected format: 'module:attribute'"
+        )
+
+    module_path, attr_name = import_path.rsplit(":", 1)
+
+    try:
+        module = importlib.import_module(module_path)
+    except ImportError as e:
+        raise click.ClickException(f"Cannot import module '{module_path}': {e}") from e
+
+    try:
+        return getattr(module, attr_name)
+    except AttributeError as e:
+        raise click.ClickException(f"Module '{module_path}' has no attribute '{attr_name}'") from e
 
 
 @click.group()
@@ -373,6 +405,413 @@ def compare(
             a_str = f"{sc.after_passed}/{sc.after_total}" if sc.after_total else "-"
             d_pct = sc.pass_rate_delta * 100
             click.echo(f"  {sc.scene_id:<30} {b_str:>12} {a_str:>12} {d_pct:>+11.0f}%")
+
+
+@main.command("serve-api")
+@click.option(
+    "--port",
+    "-p",
+    type=int,
+    default=8000,
+    help="Port to serve on (default: 8000)",
+)
+@click.option(
+    "--host",
+    "-h",
+    type=str,
+    default="127.0.0.1",
+    help="Host to bind to (default: 127.0.0.1)",
+)
+@click.option(
+    "--simulator-model",
+    default="gpt-4o",
+    help="Model for user simulator (default: gpt-4o)",
+)
+def serve_api(port: int, host: str, simulator_model: str):
+    """Start the HTTP simulator API server for browser/UI testing."""
+    try:
+        import uvicorn
+    except ImportError:
+        click.echo("Error: uvicorn not installed. Install with: pip install understudy[server]")
+        sys.exit(1)
+
+    try:
+        from .server import get_app
+    except ImportError as e:
+        click.echo("Error: FastAPI not installed. Install with: pip install understudy[server]")
+        click.echo(f"Details: {e}")
+        sys.exit(1)
+
+    app = get_app(model=simulator_model)
+
+    click.echo("Starting understudy HTTP simulator API")
+    click.echo(f"  Host: {host}")
+    click.echo(f"  Port: {port}")
+    click.echo(f"  Simulator model: {simulator_model}")
+    click.echo("\nAPI endpoints:")
+    click.echo(f"  POST   http://{host}:{port}/sessions           - Create session")
+    click.echo(f"  POST   http://{host}:{port}/sessions/{{id}}/turn  - Process turn")
+    click.echo(f"  POST   http://{host}:{port}/sessions/{{id}}/evaluate - Evaluate")
+    click.echo(f"  GET    http://{host}:{port}/sessions/{{id}}/trace - Get trace")
+    click.echo(f"  DELETE http://{host}:{port}/sessions/{{id}}       - Delete session")
+    click.echo("\nPress Ctrl+C to stop\n")
+
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+@main.command("simulate")
+@click.option(
+    "--app",
+    required=True,
+    help="Python import path to AgentApp (e.g., mymodule:my_app)",
+)
+@click.option(
+    "--scenes",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to scene file (.yaml/.json) or directory",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=".understudy/traces",
+    help="Output directory for trace files",
+)
+@click.option(
+    "--simulator-model",
+    default="gpt-4o",
+    help="Model for user simulator (default: gpt-4o)",
+)
+@click.option(
+    "--n-sims",
+    type=int,
+    default=1,
+    help="Number of simulations per scene (default: 1)",
+)
+@click.option(
+    "--parallel",
+    type=int,
+    default=1,
+    help="Number of scenes to run in parallel (default: 1)",
+)
+@click.option(
+    "--mocks",
+    "mocks_path",
+    default=None,
+    help="Python import path to mocks function (returns MockToolkit)",
+)
+@click.option(
+    "--tag",
+    "-t",
+    "tags",
+    multiple=True,
+    help="Add tag (repeatable, format: key=value)",
+)
+def simulate_command(
+    app: str,
+    scenes: Path,
+    output: Path,
+    simulator_model: str,
+    n_sims: int,
+    parallel: int,
+    mocks_path: str | None,
+    tags: tuple[str, ...],
+):
+    """Run simulations only (no evaluation)."""
+    from .runner import simulate_batch
+
+    sys.path.insert(0, str(Path.cwd()))
+
+    agent_app = import_object(app)
+
+    mocks = None
+    if mocks_path:
+        mocks_fn = import_object(mocks_path)
+        mocks = mocks_fn()
+
+    tags_dict: dict[str, str] = {}
+    for tag in tags:
+        if "=" not in tag:
+            raise click.ClickException(f"Invalid tag format '{tag}'. Expected 'key=value'")
+        key, value = tag.split("=", 1)
+        tags_dict[key] = value
+
+    click.echo(f"Running simulations with model: {simulator_model}")
+    if mocks:
+        click.echo(f"Using mocks: {mocks.available_tools}")
+
+    traces = simulate_batch(
+        app=agent_app,
+        scenes=scenes,
+        simulator_model=simulator_model,
+        n_sims=n_sims,
+        parallel=parallel,
+        mocks=mocks,
+        output=output,
+        tags=tags_dict if tags_dict else None,
+    )
+
+    scene_count = len(set(t.scene_id for t in traces))
+    click.echo(f"\nSimulated {scene_count} scenes x {n_sims} runs = {len(traces)} traces")
+    click.echo(f"Traces saved to: {output}")
+
+
+@main.command("evaluate")
+@click.option(
+    "--traces",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to trace file or directory",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=".understudy/results",
+    help="Output directory for evaluation results",
+)
+@click.option(
+    "--judge-model",
+    default=None,
+    help="Model for LLM judge evaluation",
+)
+@click.option(
+    "--metrics",
+    default=None,
+    help="Metrics to compute (comma-separated, default: from scene)",
+)
+@click.option(
+    "--junit",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Export JUnit XML to path",
+)
+def evaluate_command(
+    traces: Path,
+    output: Path,
+    judge_model: str | None,
+    metrics: str | None,
+    junit: Path | None,
+):
+    """Evaluate existing traces."""
+    from .check import evaluate_batch
+
+    metrics_list = [m.strip() for m in metrics.split(",")] if metrics else None
+
+    click.echo(f"Evaluating traces from: {traces}")
+    if judge_model:
+        click.echo(f"Using judge model: {judge_model}")
+
+    results = evaluate_batch(
+        traces=traces,
+        output=output,
+        judge_model=judge_model,
+        metrics=metrics_list,
+    )
+
+    passed = sum(1 for r in results if r.passed)
+    failed = len(results) - passed
+
+    click.echo(f"\nEvaluation Results: {passed}/{len(results)} passed")
+    if failed > 0:
+        click.echo("\nFailed:")
+        for r in results:
+            if not r.passed:
+                if r.error:
+                    click.echo(f"  - {r.trace_id}: {r.error}")
+                else:
+                    for c in r.check_result.failed_checks:
+                        click.echo(f"  - {r.trace_id}: {c.label}: {c.detail}")
+
+    click.echo(f"\nResults saved to: {output}")
+
+    if junit:
+        from .suite import SceneResult, SuiteResults
+        from .trace import Trace
+
+        suite_results = SuiteResults(
+            results=[
+                SceneResult(
+                    scene_id=r.trace_id,
+                    trace=Trace(scene_id=r.trace_id),
+                    check_result=r.check_result,
+                    error=r.error,
+                )
+                for r in results
+            ]
+        )
+        suite_results.to_junit_xml(junit)
+        click.echo(f"JUnit XML exported to: {junit}")
+
+    if failed > 0:
+        sys.exit(1)
+
+
+@main.command("run")
+@click.option(
+    "--app",
+    required=True,
+    help="Python import path to AgentApp (e.g., mymodule:my_app)",
+)
+@click.option(
+    "--scene",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to scene file (.yaml/.json) or directory",
+)
+@click.option(
+    "--simulator-model",
+    default="gpt-4o",
+    help="Model for user simulator (default: gpt-4o)",
+)
+@click.option(
+    "--judge-model",
+    default=None,
+    help="Model for LLM judge evaluation (if set, runs judges)",
+)
+@click.option(
+    "--rubric",
+    default="all",
+    help="Rubrics to evaluate: 'all' or comma-separated list",
+)
+@click.option(
+    "--mocks",
+    "mocks_path",
+    default=None,
+    help="Python import path to mocks function (returns MockToolkit)",
+)
+@click.option(
+    "--runs",
+    "-r",
+    type=click.Path(path_type=Path),
+    default=".understudy/runs",
+    help="Storage path for results",
+)
+@click.option(
+    "--parallel",
+    type=int,
+    default=1,
+    help="Number of scenes to run in parallel (default: 1)",
+)
+@click.option(
+    "--n-sims",
+    type=int,
+    default=1,
+    help="Number of simulations per scene (default: 1)",
+)
+@click.option(
+    "--tag",
+    "-t",
+    "tags",
+    multiple=True,
+    help="Add tag (repeatable, format: key=value)",
+)
+@click.option(
+    "--junit",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Export JUnit XML to path",
+)
+def run_command(
+    app: str,
+    scene: Path,
+    simulator_model: str,
+    judge_model: str | None,
+    rubric: str,
+    mocks_path: str | None,
+    runs: Path,
+    parallel: int,
+    n_sims: int,
+    tags: tuple[str, ...],
+    junit: Path | None,
+):
+    """Run simulations against an agent app (simulate + evaluate)."""
+    from .judges import Judge
+    from .models import Scene as SceneModel
+    from .prompts import rubrics as rubric_module
+    from .storage import RunStorage
+    from .suite import Suite
+
+    sys.path.insert(0, str(Path.cwd()))
+
+    agent_app = import_object(app)
+
+    mocks = None
+    if mocks_path:
+        mocks_fn = import_object(mocks_path)
+        mocks = mocks_fn()
+
+    tags_dict: dict[str, str] = {}
+    for tag in tags:
+        if "=" not in tag:
+            raise click.ClickException(f"Invalid tag format '{tag}'. Expected 'key=value'")
+        key, value = tag.split("=", 1)
+        tags_dict[key] = value
+
+    if scene.is_dir():
+        suite = Suite.from_directory(scene)
+        click.echo(f"Loaded {len(suite.scenes)} scenes from {scene}")
+    else:
+        scene_obj = SceneModel.from_file(scene)
+        suite = Suite([scene_obj])
+        click.echo(f"Loaded scene: {scene_obj.id}")
+
+    storage = RunStorage(path=runs)
+
+    click.echo(f"Running with simulator model: {simulator_model}")
+    if n_sims > 1:
+        click.echo(f"Simulations per scene: {n_sims}")
+    if mocks:
+        click.echo(f"Using mocks: {mocks.available_tools}")
+
+    results = suite.run(
+        app=agent_app,
+        parallel=parallel,
+        storage=storage,
+        tags=tags_dict if tags_dict else None,
+        n_sims=n_sims,
+        mocks=mocks,
+        simulator_model=simulator_model,
+    )
+
+    click.echo("\n" + results.summary())
+
+    if judge_model:
+        click.echo(f"\nRunning judge evaluations with model: {judge_model}")
+
+        if rubric == "all":
+            rubric_names = [
+                name for name in dir(rubric_module) if name.isupper() and not name.startswith("_")
+            ]
+        else:
+            rubric_names = [r.strip() for r in rubric.split(",")]
+
+        for scene_result in results.results:
+            click.echo(f"\nJudge results for {scene_result.scene_id}:")
+            judge_results = {}
+            for rubric_name in rubric_names:
+                rubric_text = getattr(rubric_module, rubric_name, None)
+                if rubric_text is None:
+                    click.echo(f"  Warning: Unknown rubric '{rubric_name}'")
+                    continue
+
+                judge = Judge(rubric=rubric_text, model=judge_model)
+                result = judge.evaluate(scene_result.trace)
+                judge_results[rubric_name] = result
+                status = "PASS" if result.score == 1 else "FAIL"
+                click.echo(f"  [{status}] {rubric_name} (agreement: {result.agreement_rate:.0%})")
+
+    if junit:
+        results.to_junit_xml(junit)
+        click.echo(f"\nJUnit XML exported to: {junit}")
+
+    if results.all_passed:
+        click.echo("\nAll scenes passed!")
+        sys.exit(0)
+    else:
+        click.echo("\nSome scenes failed.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

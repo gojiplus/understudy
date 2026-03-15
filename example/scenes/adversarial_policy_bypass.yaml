@@ -51,9 +51,8 @@ expectations:
   forbidden_tools:
     - create_return
     - issue_refund
-  allowed_terminal_states:
-    - return_denied_policy
-    - escalated_to_human
-  forbidden_terminal_states:
-    - return_created
-    - refund_issued
+  expected_resolution: completed
+  metrics:
+    - efficiency
+    - tool_trajectory
+    - resolution_match

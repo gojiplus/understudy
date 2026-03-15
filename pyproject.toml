@@ -31,6 +31,8 @@ dependencies = [
 [project.optional-dependencies]
 adk = ["google-adk>=1.0", "python-dotenv>=1.0"]
 http = ["httpx>=0.27"]
+langgraph = ["langgraph>=0.2", "langchain-core>=0.3", "langchain-openai>=0.3"]
+server = ["fastapi>=0.115", "uvicorn>=0.32"]
 reports = ["jinja2>=3.0", "click>=8.0"]
 docs = [
     "sphinx>=7.0",
@@ -38,7 +40,7 @@ docs = [
     "myst-parser>=3.0",
     "sphinx-autodoc-typehints>=2.0",
 ]
-all = ["understudy[adk,http,reports]"]
+all = ["understudy[adk,http,langgraph,server,reports]"]
 dev = [
     "understudy[all,docs]",
     "pytest>=8.0",

@@ -3,7 +3,16 @@
 import pytest
 from click.testing import CliRunner
 
-from understudy import Expectations, Persona, RunStorage, Scene, Trace, Turn, check
+from understudy import (
+    Expectations,
+    Persona,
+    RunStorage,
+    Scene,
+    Trace,
+    TraceStorage,
+    Turn,
+    check,
+)
 from understudy.cli import main
 
 
@@ -27,7 +36,7 @@ def storage_with_runs(tmp_path):
             starting_prompt="hello",
             conversation_plan="greet",
             persona=Persona(description="friendly"),
-            expectations=Expectations(allowed_terminal_states=["done"]),
+            expectations=Expectations(),
         )
         check_result = check(trace, scene.expectations)
         tags = {"version": "v1"} if i < 2 else {"version": "v2"}
@@ -149,7 +158,7 @@ class TestCompareCommand:
                     starting_prompt="hi",
                     conversation_plan="test",
                     persona=Persona(description="test"),
-                    expectations=Expectations(allowed_terminal_states=["done"]),
+                    expectations=Expectations(),
                 )
                 check_result = check(trace, scene.expectations)
                 storage.save(trace, scene, check_result=check_result, tags={"version": version})
@@ -214,3 +223,493 @@ class TestCompareCommand:
         assert result.exit_code == 0
         assert output_file.exists()
         assert "Comparison report generated" in result.output
+
+
+class TestRunCommand:
+    @pytest.fixture
+    def scene_file(self, tmp_path):
+        scene_content = """\
+id: test_scene
+description: Test scene for CLI
+starting_prompt: Hello, I need help
+conversation_plan: Ask for help and accept the response
+persona: cooperative
+expectations:
+  required_tools: []
+"""
+        scene_path = tmp_path / "test_scene.yaml"
+        scene_path.write_text(scene_content)
+        return scene_path
+
+    @pytest.fixture
+    def scene_dir(self, tmp_path):
+        scenes_dir = tmp_path / "scenes"
+        scenes_dir.mkdir()
+
+        for i in range(2):
+            scene_content = f"""\
+id: scene_{i}
+description: Test scene {i}
+starting_prompt: Hello {i}
+conversation_plan: Simple test
+persona: cooperative
+expectations:
+  required_tools: []
+"""
+            (scenes_dir / f"scene_{i}.yaml").write_text(scene_content)
+
+        return scenes_dir
+
+    @pytest.fixture
+    def mock_app_module(self, tmp_path):
+        module_content = """\
+from understudy.runner import AgentResponse
+
+class MockApp:
+    def start(self, mocks=None):
+        pass
+
+    def send(self, message):
+        return AgentResponse(
+            content="I can help with that!",
+            terminal_state="done",
+        )
+
+    def stop(self):
+        pass
+
+app = MockApp()
+"""
+        module_path = tmp_path / "mock_app.py"
+        module_path.write_text(module_content)
+        return tmp_path
+
+    @pytest.fixture
+    def mock_mocks_module(self, tmp_path):
+        module_content = """\
+from understudy.mocks import MockToolkit
+
+def create_mocks():
+    toolkit = MockToolkit()
+
+    @toolkit.handle("test_tool")
+    def test_tool():
+        return {"result": "ok"}
+
+    return toolkit
+"""
+        module_path = tmp_path / "mock_mocks.py"
+        module_path.write_text(module_content)
+        return tmp_path
+
+    def test_run_invalid_import_path(self, runner, scene_file):
+        result = runner.invoke(
+            main,
+            [
+                "run",
+                "--app",
+                "invalid_path_no_colon",
+                "--scene",
+                str(scene_file),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Invalid import path" in result.output
+
+    def test_run_module_not_found(self, runner, scene_file):
+        result = runner.invoke(
+            main,
+            [
+                "run",
+                "--app",
+                "nonexistent_module:app",
+                "--scene",
+                str(scene_file),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Cannot import module" in result.output
+
+    def test_run_single_scene(self, runner, scene_file, mock_app_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            runs_path = tmp_path / "runs"
+            result = runner.invoke(
+                main,
+                [
+                    "run",
+                    "--app",
+                    "mock_app:app",
+                    "--scene",
+                    str(scene_file),
+                    "--runs",
+                    str(runs_path),
+                ],
+            )
+            assert "Loaded scene: test_scene" in result.output
+            assert "Running with simulator model: gpt-4o" in result.output
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+    def test_run_scene_directory(self, runner, scene_dir, mock_app_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            runs_path = tmp_path / "runs"
+            result = runner.invoke(
+                main,
+                [
+                    "run",
+                    "--app",
+                    "mock_app:app",
+                    "--scene",
+                    str(scene_dir),
+                    "--runs",
+                    str(runs_path),
+                ],
+            )
+            assert "Loaded 2 scenes from" in result.output
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+    def test_run_with_custom_model(self, runner, scene_file, mock_app_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            runs_path = tmp_path / "runs"
+            result = runner.invoke(
+                main,
+                [
+                    "run",
+                    "--app",
+                    "mock_app:app",
+                    "--scene",
+                    str(scene_file),
+                    "--simulator-model",
+                    "claude-sonnet-4-20250514",
+                    "--runs",
+                    str(runs_path),
+                ],
+            )
+            assert "Running with simulator model: claude-sonnet-4-20250514" in result.output
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+    def test_run_with_tags(self, runner, scene_file, mock_app_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            runs_path = tmp_path / "runs"
+            result = runner.invoke(
+                main,
+                [
+                    "run",
+                    "--app",
+                    "mock_app:app",
+                    "--scene",
+                    str(scene_file),
+                    "--tag",
+                    "version=v1",
+                    "--tag",
+                    "model=test",
+                    "--runs",
+                    str(runs_path),
+                ],
+            )
+            assert result.exit_code == 0
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+    def test_run_invalid_tag_format(self, runner, scene_file, mock_app_module):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            result = runner.invoke(
+                main,
+                [
+                    "run",
+                    "--app",
+                    "mock_app:app",
+                    "--scene",
+                    str(scene_file),
+                    "--tag",
+                    "invalid_tag_no_equals",
+                ],
+            )
+            assert result.exit_code != 0
+            assert "Invalid tag format" in result.output
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+    def test_run_with_mocks(self, runner, scene_file, mock_app_module, mock_mocks_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        sys.path.insert(0, str(mock_mocks_module))
+        try:
+            runs_path = tmp_path / "runs"
+            result = runner.invoke(
+                main,
+                [
+                    "run",
+                    "--app",
+                    "mock_app:app",
+                    "--scene",
+                    str(scene_file),
+                    "--mocks",
+                    "mock_mocks:create_mocks",
+                    "--runs",
+                    str(runs_path),
+                ],
+            )
+            assert "Using mocks:" in result.output
+            assert "test_tool" in result.output
+        finally:
+            sys.path.remove(str(mock_app_module))
+            sys.path.remove(str(mock_mocks_module))
+
+    def test_run_with_junit_output(self, runner, scene_file, mock_app_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            runs_path = tmp_path / "runs"
+            junit_path = tmp_path / "results.xml"
+            result = runner.invoke(
+                main,
+                [
+                    "run",
+                    "--app",
+                    "mock_app:app",
+                    "--scene",
+                    str(scene_file),
+                    "--runs",
+                    str(runs_path),
+                    "--junit",
+                    str(junit_path),
+                ],
+            )
+            assert "JUnit XML exported to:" in result.output
+            assert junit_path.exists()
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+    def test_run_with_n_sims(self, runner, scene_file, mock_app_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            runs_path = tmp_path / "runs"
+            result = runner.invoke(
+                main,
+                [
+                    "run",
+                    "--app",
+                    "mock_app:app",
+                    "--scene",
+                    str(scene_file),
+                    "--runs",
+                    str(runs_path),
+                    "--n-sims",
+                    "2",
+                ],
+            )
+            assert "Simulations per scene: 2" in result.output
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+
+class TestSimulateCommand:
+    @pytest.fixture
+    def scene_file(self, tmp_path):
+        scene_content = """\
+id: test_scene
+description: Test scene for CLI
+starting_prompt: Hello, I need help
+conversation_plan: Ask for help and accept the response
+persona: cooperative
+expectations:
+  required_tools: []
+"""
+        scene_path = tmp_path / "test_scene.yaml"
+        scene_path.write_text(scene_content)
+        return scene_path
+
+    @pytest.fixture
+    def scene_dir(self, tmp_path):
+        scenes_dir = tmp_path / "scenes"
+        scenes_dir.mkdir()
+
+        for i in range(2):
+            scene_content = f"""\
+id: scene_{i}
+description: Test scene {i}
+starting_prompt: Hello {i}
+conversation_plan: Simple test
+persona: cooperative
+expectations:
+  required_tools: []
+"""
+            (scenes_dir / f"scene_{i}.yaml").write_text(scene_content)
+
+        return scenes_dir
+
+    @pytest.fixture
+    def mock_app_module(self, tmp_path):
+        module_content = """\
+from understudy.runner import AgentResponse
+
+class MockApp:
+    def start(self, mocks=None):
+        pass
+
+    def send(self, message):
+        return AgentResponse(
+            content="I can help with that!",
+            terminal_state="done",
+        )
+
+    def stop(self):
+        pass
+
+app = MockApp()
+"""
+        module_path = tmp_path / "mock_app.py"
+        module_path.write_text(module_content)
+        return tmp_path
+
+    def test_simulate_single_scene(self, runner, scene_file, mock_app_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            output_path = tmp_path / "traces"
+            result = runner.invoke(
+                main,
+                [
+                    "simulate",
+                    "--app",
+                    "mock_app:app",
+                    "--scenes",
+                    str(scene_file),
+                    "--output",
+                    str(output_path),
+                ],
+            )
+            assert "Running simulations with model: gpt-4o" in result.output
+            assert "Traces saved to:" in result.output
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+    def test_simulate_with_n_sims(self, runner, scene_file, mock_app_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            output_path = tmp_path / "traces"
+            result = runner.invoke(
+                main,
+                [
+                    "simulate",
+                    "--app",
+                    "mock_app:app",
+                    "--scenes",
+                    str(scene_file),
+                    "--output",
+                    str(output_path),
+                    "--n-sims",
+                    "3",
+                ],
+            )
+            assert "1 scenes x 3 runs = 3 traces" in result.output
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+    def test_simulate_directory(self, runner, scene_dir, mock_app_module, tmp_path):
+        import sys
+
+        sys.path.insert(0, str(mock_app_module))
+        try:
+            output_path = tmp_path / "traces"
+            result = runner.invoke(
+                main,
+                [
+                    "simulate",
+                    "--app",
+                    "mock_app:app",
+                    "--scenes",
+                    str(scene_dir),
+                    "--output",
+                    str(output_path),
+                    "--n-sims",
+                    "2",
+                ],
+            )
+            assert "2 scenes x 2 runs = 4 traces" in result.output
+        finally:
+            sys.path.remove(str(mock_app_module))
+
+
+class TestEvaluateCommand:
+    @pytest.fixture
+    def trace_storage_with_traces(self, tmp_path):
+        storage = TraceStorage(path=tmp_path / "traces")
+
+        for i in range(2):
+            trace = Trace(
+                scene_id=f"scene_{i}",
+                turns=[Turn(role="user", content="hello"), Turn(role="agent", content="hi")],
+                terminal_state="completed",
+            )
+            scene = Scene(
+                id=f"scene_{i}",
+                starting_prompt="hello",
+                conversation_plan="greet",
+                persona=Persona(description="friendly"),
+                expectations=Expectations(expected_resolution="completed"),
+            )
+            storage.save(trace, scene, sim_index=0)
+
+        return storage
+
+    def test_evaluate_traces(self, runner, trace_storage_with_traces, tmp_path):
+        output_path = tmp_path / "results"
+        result = runner.invoke(
+            main,
+            [
+                "evaluate",
+                "--traces",
+                str(trace_storage_with_traces.path),
+                "--output",
+                str(output_path),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Evaluating traces from:" in result.output
+        assert "2/2 passed" in result.output
+        assert "Results saved to:" in result.output
+
+    def test_evaluate_with_junit(self, runner, trace_storage_with_traces, tmp_path):
+        output_path = tmp_path / "results"
+        junit_path = tmp_path / "results.xml"
+        result = runner.invoke(
+            main,
+            [
+                "evaluate",
+                "--traces",
+                str(trace_storage_with_traces.path),
+                "--output",
+                str(output_path),
+                "--junit",
+                str(junit_path),
+            ],
+        )
+        assert result.exit_code == 0
+        assert junit_path.exists()
+        assert "JUnit XML exported to:" in result.output

@@ -6,6 +6,53 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class TurnMetrics(BaseModel):
+    """Efficiency metrics for a single turn."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    thinking_tokens: int = 0
+    latency_ms: int = 0
+
+
+class TraceMetrics(BaseModel):
+    """Aggregated efficiency metrics across all turns."""
+
+    turns: list[TurnMetrics] = Field(default_factory=list)
+
+    @property
+    def total_input_tokens(self) -> int:
+        return sum(t.input_tokens for t in self.turns)
+
+    @property
+    def total_output_tokens(self) -> int:
+        return sum(t.output_tokens for t in self.turns)
+
+    @property
+    def total_thinking_tokens(self) -> int:
+        return sum(t.thinking_tokens for t in self.turns)
+
+    @property
+    def total_tokens(self) -> int:
+        return self.total_input_tokens + self.total_output_tokens + self.total_thinking_tokens
+
+    @property
+    def agent_time_ms(self) -> int:
+        return sum(t.latency_ms for t in self.turns)
+
+    @property
+    def avg_turn_latency_ms(self) -> float:
+        return self.agent_time_ms / len(self.turns) if self.turns else 0
+
+
+class StateSnapshot(BaseModel):
+    """Snapshot of agent state after a turn."""
+
+    turn_number: int
+    state: dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime | None = None
+
+
 class ToolCall(BaseModel):
     """A single tool invocation recorded from the agent."""
 
@@ -48,6 +95,8 @@ class Trace(BaseModel):
     finished_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     agent_transfers: list[AgentTransfer] = Field(default_factory=list)
+    metrics: TraceMetrics = Field(default_factory=TraceMetrics)
+    state_snapshots: list[StateSnapshot] = Field(default_factory=list)
 
     @property
     def tool_calls(self) -> list[ToolCall]:

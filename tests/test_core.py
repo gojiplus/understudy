@@ -8,6 +8,7 @@ import yaml
 from understudy import (
     AgentResponse,
     AgentTransfer,
+    EvaluationStorage,
     Expectations,
     MockToolkit,
     Persona,
@@ -18,8 +19,11 @@ from understudy import (
     ToolCall,
     ToolError,
     Trace,
+    TraceStorage,
     Turn,
     check,
+    evaluate,
+    evaluate_batch,
 )
 
 # --- Persona ---
@@ -68,7 +72,6 @@ class TestScene:
             "expectations": {
                 "required_tools": ["lookup_order"],
                 "forbidden_tools": ["issue_refund"],
-                "allowed_terminal_states": ["resolved"],
             },
         }
         path = tmp_path / "test.yaml"
@@ -213,7 +216,6 @@ class TestCheck:
         expectations = Expectations(
             required_tools=["lookup_order", "get_return_policy"],
             forbidden_tools=["create_return"],
-            allowed_terminal_states=["return_denied_policy"],
         )
         result = check(trace, expectations)
         assert result.passed
@@ -255,21 +257,19 @@ class TestCheck:
         result = check(trace, expectations)
         assert not result.passed
 
-    def test_wrong_terminal_state(self):
+    def test_summary(self):
         trace = Trace(
             scene_id="test",
-            turns=[],
-            terminal_state="return_created",
+            turns=[
+                Turn(role="user", content="hi"),
+                Turn(
+                    role="agent",
+                    content="hello",
+                    tool_calls=[ToolCall(tool_name="forbidden_tool", arguments={})],
+                ),
+            ],
         )
-        expectations = Expectations(
-            allowed_terminal_states=["return_denied_policy"],
-        )
-        result = check(trace, expectations)
-        assert not result.passed
-
-    def test_summary(self):
-        trace = Trace(scene_id="test", turns=[], terminal_state="bad_state")
-        expectations = Expectations(allowed_terminal_states=["good_state"])
+        expectations = Expectations(forbidden_tools=["forbidden_tool"])
         result = check(trace, expectations)
         summary = result.summary()
         assert "✗" in summary
@@ -590,7 +590,7 @@ class TestRunStorage:
                 starting_prompt="hi",
                 conversation_plan="test",
                 persona=Persona(description="test"),
-                expectations=Expectations(allowed_terminal_states=["done"]),
+                expectations=Expectations(),
             )
 
             from understudy.check import check as check_fn
@@ -644,3 +644,383 @@ class TestSuite:
 
         run_data = storage.load(runs[0])
         assert run_data["metadata"]["tags"] == {"version": "v1", "model": "gpt-4"}
+
+
+# --- Metrics ---
+
+
+class TestMetrics:
+    def test_trace_metrics_totals(self):
+        from understudy.trace import TraceMetrics, TurnMetrics
+
+        metrics = TraceMetrics(
+            turns=[
+                TurnMetrics(input_tokens=100, output_tokens=50, thinking_tokens=10, latency_ms=500),
+                TurnMetrics(
+                    input_tokens=200, output_tokens=100, thinking_tokens=20, latency_ms=600
+                ),
+            ]
+        )
+        assert metrics.total_input_tokens == 300
+        assert metrics.total_output_tokens == 150
+        assert metrics.total_thinking_tokens == 30
+        assert metrics.total_tokens == 480
+        assert metrics.agent_time_ms == 1100
+        assert metrics.avg_turn_latency_ms == 550.0
+
+    def test_trace_with_metrics(self):
+        from understudy.trace import TraceMetrics, TurnMetrics
+
+        trace = Trace(
+            scene_id="test",
+            turns=[
+                Turn(role="user", content="hello"),
+                Turn(role="agent", content="hi"),
+            ],
+            metrics=TraceMetrics(
+                turns=[
+                    TurnMetrics(input_tokens=100, output_tokens=50, latency_ms=500),
+                ]
+            ),
+        )
+        assert trace.metrics.total_tokens == 150
+
+    def test_efficiency_metric(self):
+        from understudy.metrics import MetricRegistry
+        from understudy.trace import TraceMetrics, TurnMetrics
+
+        trace = Trace(
+            scene_id="test",
+            turns=[
+                Turn(role="user", content="hello"),
+                Turn(role="agent", content="hi"),
+            ],
+            metrics=TraceMetrics(
+                turns=[
+                    TurnMetrics(input_tokens=100, output_tokens=50, latency_ms=500),
+                ]
+            ),
+        )
+        expectations = Expectations()
+        result = MetricRegistry.compute("efficiency", trace, expectations)
+        assert result.name == "efficiency"
+        assert result.value["total_tokens"] == 150
+        assert result.value["turn_count"] == 2
+
+    def test_resolution_match_metric_pass(self):
+        from understudy.metrics import MetricRegistry
+
+        trace = Trace(
+            scene_id="test",
+            turns=[Turn(role="agent", content="done")],
+            terminal_state="completed",
+        )
+        expectations = Expectations(expected_resolution="completed")
+        result = MetricRegistry.compute("resolution_match", trace, expectations)
+        assert result.passed is True
+
+    def test_resolution_match_metric_fail(self):
+        from understudy.metrics import MetricRegistry
+
+        trace = Trace(
+            scene_id="test",
+            turns=[Turn(role="agent", content="done")],
+            terminal_state="failed",
+        )
+        expectations = Expectations(expected_resolution="completed")
+        result = MetricRegistry.compute("resolution_match", trace, expectations)
+        assert result.passed is False
+
+    def test_tool_trajectory_metric(self):
+        from understudy.metrics import MetricRegistry
+
+        trace = Trace(
+            scene_id="test",
+            turns=[
+                Turn(
+                    role="agent",
+                    content="ok",
+                    tool_calls=[
+                        ToolCall(tool_name="lookup_order", arguments={}),
+                        ToolCall(tool_name="get_return_policy", arguments={}),
+                        ToolCall(tool_name="lookup_order", arguments={}),
+                    ],
+                )
+            ],
+        )
+        expectations = Expectations()
+        result = MetricRegistry.compute("tool_trajectory", trace, expectations)
+        assert result.name == "tool_trajectory"
+        assert result.value["total_calls"] == 3
+        assert "lookup_order" in result.value["unique_tools"]
+        assert result.value["sequence"] == ["lookup_order", "get_return_policy", "lookup_order"]
+
+    def test_check_with_metrics(self):
+        trace = Trace(
+            scene_id="test",
+            turns=[
+                Turn(
+                    role="agent",
+                    content="ok",
+                    tool_calls=[ToolCall(tool_name="lookup_order", arguments={})],
+                )
+            ],
+            terminal_state="completed",
+        )
+        expectations = Expectations(
+            required_tools=["lookup_order"],
+            expected_resolution="completed",
+            metrics=["efficiency", "tool_trajectory"],
+        )
+        result = check(trace, expectations)
+        assert result.passed
+        assert "efficiency" in result.metrics
+        assert "tool_trajectory" in result.metrics
+        assert result.metric("efficiency") is not None
+
+    def test_check_expected_resolution_fail(self):
+        trace = Trace(
+            scene_id="test",
+            turns=[Turn(role="agent", content="ok")],
+            terminal_state="failed",
+        )
+        expectations = Expectations(expected_resolution="completed")
+        result = check(trace, expectations)
+        assert not result.passed
+        assert any(c.label == "expected_resolution" for c in result.failed_checks)
+
+
+class TestStateSnapshots:
+    def test_state_snapshot_in_trace(self):
+        from understudy.trace import StateSnapshot
+
+        trace = Trace(
+            scene_id="test",
+            turns=[Turn(role="agent", content="ok")],
+            state_snapshots=[
+                StateSnapshot(turn_number=1, state={"order_id": "ORD-123"}),
+                StateSnapshot(turn_number=2, state={"order_id": "ORD-123", "status": "approved"}),
+            ],
+        )
+        assert len(trace.state_snapshots) == 2
+        assert trace.state_snapshots[0].state["order_id"] == "ORD-123"
+        assert trace.state_snapshots[1].state["status"] == "approved"
+
+
+# --- TraceStorage ---
+
+
+class TestTraceStorage:
+    def test_save_and_load(self, tmp_path):
+        storage = TraceStorage(path=tmp_path / "traces")
+
+        trace = Trace(
+            scene_id="test_scene",
+            turns=[Turn(role="user", content="hello")],
+            terminal_state="done",
+        )
+        scene = Scene(
+            id="test_scene",
+            starting_prompt="hello",
+            conversation_plan="greet",
+            persona=Persona(description="friendly"),
+        )
+
+        trace_id = storage.save(trace, scene, sim_index=0)
+        assert "test_scene_0_" in trace_id
+
+        data = storage.load(trace_id)
+        assert data["trace"].scene_id == "test_scene"
+        assert data["scene"].id == "test_scene"
+        assert data["metadata"]["sim_index"] == 0
+
+    def test_list_traces(self, tmp_path):
+        storage = TraceStorage(path=tmp_path / "traces")
+
+        for i in range(3):
+            trace = Trace(scene_id=f"scene_{i}", turns=[], terminal_state="done")
+            scene = Scene(
+                id=f"scene_{i}",
+                starting_prompt="hi",
+                conversation_plan="test",
+                persona=Persona(description="test"),
+            )
+            storage.save(trace, scene, sim_index=0)
+
+        traces = storage.list_traces()
+        assert len(traces) == 3
+
+    def test_delete(self, tmp_path):
+        storage = TraceStorage(path=tmp_path / "traces")
+
+        trace = Trace(scene_id="test", turns=[], terminal_state="done")
+        scene = Scene(
+            id="test",
+            starting_prompt="hi",
+            conversation_plan="test",
+            persona=Persona(description="test"),
+        )
+        trace_id = storage.save(trace, scene, sim_index=0)
+
+        storage.delete(trace_id)
+        assert len(storage.list_traces()) == 0
+
+
+# --- EvaluationStorage ---
+
+
+class TestEvaluationStorage:
+    def test_save_and_load(self, tmp_path):
+        from understudy.check import CheckItem, CheckResult
+
+        storage = EvaluationStorage(path=tmp_path / "results")
+
+        check_result = CheckResult(
+            checks=[
+                CheckItem(label="required_tool", passed=True, detail="lookup_order called"),
+            ]
+        )
+
+        result_id = storage.save(trace_id="test_trace", check_result=check_result)
+        assert "test_trace_eval" in result_id
+
+        data = storage.load(result_id)
+        assert data["trace_id"] == "test_trace"
+        assert data["passed"] is True
+        assert len(data["checks"]) == 1
+
+    def test_list_results(self, tmp_path):
+        from understudy.check import CheckResult
+
+        storage = EvaluationStorage(path=tmp_path / "results")
+
+        for i in range(3):
+            storage.save(trace_id=f"trace_{i}", check_result=CheckResult())
+
+        results = storage.list_results()
+        assert len(results) == 3
+
+
+# --- Evaluate Functions ---
+
+
+class TestEvaluateFunctions:
+    def test_evaluate_single_trace(self):
+        trace = Trace(
+            scene_id="test",
+            turns=[
+                Turn(
+                    role="agent",
+                    content="done",
+                    tool_calls=[ToolCall(tool_name="lookup_order", arguments={})],
+                )
+            ],
+            terminal_state="completed",
+        )
+        expectations = Expectations(
+            required_tools=["lookup_order"],
+            expected_resolution="completed",
+        )
+        result = evaluate(trace, expectations)
+        assert result.passed
+        assert len(result.checks) == 2
+
+    def test_evaluate_with_metrics_override(self):
+        trace = Trace(
+            scene_id="test",
+            turns=[Turn(role="agent", content="done")],
+            terminal_state="completed",
+        )
+        expectations = Expectations(expected_resolution="completed")
+        result = evaluate(trace, expectations, metrics=["efficiency"])
+        assert "efficiency" in result.metrics
+
+    def test_evaluate_batch_from_list(self, tmp_path):
+        traces = [
+            Trace(
+                scene_id="test_1",
+                turns=[Turn(role="agent", content="done")],
+                terminal_state="completed",
+            ),
+            Trace(
+                scene_id="test_2",
+                turns=[Turn(role="agent", content="fail")],
+                terminal_state="failed",
+            ),
+        ]
+        expectations = Expectations(expected_resolution="completed")
+
+        results = evaluate_batch(traces, expectations=expectations)
+        assert len(results) == 2
+        assert results[0].passed
+        assert not results[1].passed
+
+    def test_evaluate_batch_from_storage(self, tmp_path):
+        storage = TraceStorage(path=tmp_path / "traces")
+
+        for i in range(2):
+            trace = Trace(
+                scene_id=f"scene_{i}",
+                turns=[Turn(role="agent", content="ok")],
+                terminal_state="completed",
+            )
+            scene = Scene(
+                id=f"scene_{i}",
+                starting_prompt="hi",
+                conversation_plan="test",
+                persona=Persona(description="test"),
+                expectations=Expectations(expected_resolution="completed"),
+            )
+            storage.save(trace, scene, sim_index=0)
+
+        output_path = tmp_path / "results"
+        results = evaluate_batch(traces=tmp_path / "traces", output=output_path)
+        assert len(results) == 2
+        assert all(r.passed for r in results)
+
+        result_storage = EvaluationStorage(path=output_path)
+        assert len(result_storage.list_results()) == 2
+
+
+# --- Suite with n_sims ---
+
+
+class TestSuiteWithNSims:
+    def test_run_with_n_sims(self, tmp_path):
+        scene = Scene(
+            id="nsims_test_scene",
+            starting_prompt="hello",
+            conversation_plan="greet",
+            persona=Persona(description="friendly"),
+            expectations=Expectations(),
+        )
+        suite = Suite([scene])
+        storage = RunStorage(path=tmp_path / "runs")
+
+        app = MockAgentApp()
+        results = suite.run(app, storage=storage, n_sims=3)
+
+        assert len(results.results) == 3
+        scene_ids = [r.scene_id for r in results.results]
+        assert "nsims_test_scene" in scene_ids
+        assert "nsims_test_scene_1" in scene_ids
+        assert "nsims_test_scene_2" in scene_ids
+
+    def test_run_multiple_scenes_with_n_sims(self, tmp_path):
+        scenes = [
+            Scene(
+                id=f"scene_{i}",
+                starting_prompt="hello",
+                conversation_plan="greet",
+                persona=Persona(description="friendly"),
+                expectations=Expectations(),
+            )
+            for i in range(2)
+        ]
+        suite = Suite(scenes)
+        storage = RunStorage(path=tmp_path / "runs")
+
+        app = MockAgentApp()
+        results = suite.run(app, storage=storage, n_sims=2)
+
+        assert len(results.results) == 4

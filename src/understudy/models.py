@@ -103,11 +103,11 @@ class Expectations(BaseModel):
 
     required_tools: list[str] = Field(default_factory=list)
     forbidden_tools: list[str] = Field(default_factory=list)
-    allowed_terminal_states: list[str] = Field(default_factory=list)
-    forbidden_terminal_states: list[str] = Field(default_factory=list)
     required_agents: list[str] = Field(default_factory=list)
     forbidden_agents: list[str] = Field(default_factory=list)
     required_agent_tools: dict[str, list[str]] = Field(default_factory=dict)
+    expected_resolution: str | None = None
+    metrics: list[str] = Field(default_factory=list)
 
 
 class Scene(BaseModel):

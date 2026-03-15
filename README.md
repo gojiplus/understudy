@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
-Understudy is a scenario-driven testing framework for AI agents that simulates realistic multi-turn users, runs those scenes against an agent through a simple app adapter, records a structured execution trace of messages, tool calls, handoffs, and terminal states, and then evaluates behavior with deterministic checks, optional LLM judges, and run reports.
+Understudy is a scenario-driven testing framework for AI agents that simulates realistic multi-turn users, runs those scenes against an agent through a simple app adapter, records a structured execution trace of messages, tool calls, and handoffs, and then evaluates behavior with deterministic checks, optional LLM judges, and run reports.
 
 ## How It Works
 
@@ -18,12 +18,12 @@ Testing with understudy is **4 steps**:
 3. **Write scenes** — YAML files defining what the simulated user wants and what you expect
 4. **Run and assert** — Execute simulations, check traces, generate reports
 
-The key insight: **assert against the trace, not the prose**. Don't check what the agent said—check what it did (tool calls, terminal state).
+The key insight: **assert against the trace, not the prose**. Don't check what the agent said—check what it did (tool calls).
 
 **See real examples:**
 - [Example scene](https://github.com/gojiplus/understudy/blob/main/example/scenes/return_eligible_backpack.yaml) — YAML defining a test scenario
-- [Test file](https://github.com/gojiplus/understudy/blob/main/example/test_returns.py) — pytest assertions against traces
-- [Sample report](https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/example/sample_report.html) — HTML output from `understudy report`
+- [ADK test file](https://github.com/gojiplus/understudy/blob/main/example/adk/test_returns.py) — pytest assertions against traces
+- [LangGraph test file](https://github.com/gojiplus/understudy/blob/main/example/langgraph/test_returns.py) — same tests, different framework
 
 ## Installation
 
@@ -81,21 +81,21 @@ expectations:
   required_tools:
     - lookup_order
     - create_return
-  allowed_terminal_states:
-    - return_created
+  forbidden_tools:
+    - issue_refund
 ```
 
 ### 4. Run simulation
 
 ```python
-from understudy import Scene, run, check
+from understudy import Scene, run
 
 scene = Scene.from_file("scenes/return_backpack.yaml")
 trace = run(app, scene, mocks=mocks)
 
 assert trace.called("lookup_order")
 assert trace.called("create_return")
-assert trace.terminal_state == "return_created"
+assert not trace.called("issue_refund")
 ```
 
 Or with pytest (define `app` and `mocks` fixtures in conftest.py):
@@ -180,7 +180,6 @@ The `understudy summary` command shows:
 - **Pass rate** - percentage of scenes that passed all expectations
 - **Avg turns** - average conversation length
 - **Tool usage** - distribution of tool calls across runs
-- **Terminal states** - breakdown of how conversations ended
 - **Agents** - which agents were invoked
 
 The HTML report (`understudy report`) includes:

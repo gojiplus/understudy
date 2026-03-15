@@ -146,9 +146,6 @@ class HTTPApp(AgentApp):
                         text = part.get("text")
                         if text:
                             agent_text_parts.append(text)
-                            if "TERMINAL_STATE:" in text:
-                                state = text.split("TERMINAL_STATE:")[-1].strip()
-                                terminal_state = state.split()[0].strip()
 
         except httpx.HTTPStatusError as e:
             raise RuntimeError(f"HTTP request failed: {e.response.status_code}") from e
@@ -334,9 +331,6 @@ class AgentEngineApp(HTTPApp):
                         text = part.get("text")
                         if text:
                             agent_text_parts.append(text)
-                            if "TERMINAL_STATE:" in text:
-                                state = text.split("TERMINAL_STATE:")[-1].strip()
-                                terminal_state = state.split()[0].strip()
 
         except Exception as e:
             raise RuntimeError(f"Agent Engine request failed: {e}") from e

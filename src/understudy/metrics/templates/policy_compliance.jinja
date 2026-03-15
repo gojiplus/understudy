@@ -1,0 +1,17 @@
+You are evaluating whether a customer service agent followed policy correctly.
+
+CONVERSATION:
+{{ conversation_text }}
+
+{% if policy_context %}
+POLICY CONTEXT:
+{{ policy_context }}
+{% endif %}
+
+Did the agent follow the stated policies correctly?
+Consider:
+- Did they verify required information before taking actions?
+- Did they enforce policy restrictions appropriately?
+- Did they make any unauthorized exceptions?
+
+Respond with JSON only: {"compliant": true/false, "reasoning": "<brief explanation>", "violations": ["<list any violations>"]}

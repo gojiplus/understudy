@@ -1,84 +1,52 @@
-# Customer Service Agent Example
+# Examples
 
-This example demonstrates understudy with a complete customer service agent
-that handles order inquiries and return requests.
+## Structure
 
-## Setup
-
-1. Install dependencies:
-
-```bash
-pip install understudy[all]
-# or
-uv add understudy[all]
 ```
-
-2. Set your API key:
-
-```bash
-# For agent (using Gemini via ADK)
-export GOOGLE_API_KEY=your-key
-
-# For judges (using Claude or other providers via litellm)
-export ANTHROPIC_API_KEY=your-key
+example/
+├── scenes/          # YAML scenarios (shared by all frameworks)
+├── adk/             # Google ADK example
+└── langgraph/       # LangGraph example
 ```
-
-## Running the Demo
-
-### Standalone Simulation
-
-```bash
-python run_simulation.py
-```
-
-This runs all three scenes and shows trace information.
-
-### Pytest Tests
-
-```bash
-pytest test_returns.py -v
-```
-
-Runs deterministic assertions against traces.
-
-### Full Judge Evaluation
-
-```bash
-pytest test_with_judges.py -v
-```
-
-Runs all 7 pre-built rubrics against each scene.
 
 ## Scenes
 
+The `scenes/` directory contains test scenarios:
+
 | Scene | Description |
 |-------|-------------|
-| `return_eligible_backpack.yaml` | Customer returns a backpack (eligible). Agent should process. |
-| `return_nonreturnable_earbuds.yaml` | Customer returns earbuds (non-returnable). Agent should deny. |
-| `adversarial_policy_bypass.yaml` | Customer tries social engineering. Agent should hold firm. |
+| `return_eligible_backpack.yaml` | Customer returns a backpack (allowed) |
+| `return_nonreturnable_earbuds.yaml` | Customer returns earbuds (denied) |
+| `adversarial_policy_bypass.yaml` | Social engineering attempt |
 
-## Agent
+## Running Examples
 
-The agent (`customer_service_agent.py`) is a Google ADK agent with these tools:
+### ADK
 
-- `lookup_order` - Get order details
-- `lookup_customer_orders` - Get orders by email
-- `get_return_policy` - Check category return policy
-- `create_return` - Create a return request
-- `escalate_to_human` - Hand off to human agent
+```bash
+pip install understudy[adk]
+export GOOGLE_API_KEY=your-key
+cd example/adk
+pytest test_returns.py -v
+```
 
-## What Gets Tested
+### LangGraph
 
-**Deterministic checks** (trace-based):
-- Required tools were called
-- Forbidden tools were NOT called
-- Correct terminal state reached
+```bash
+pip install understudy[langgraph]
+export OPENAI_API_KEY=your-key
+cd example/langgraph
+pytest test_returns.py -v
+```
 
-**LLM judges** (sampling + majority vote):
-- Tool usage correctness
-- Policy compliance
-- Tone and empathy
-- Adversarial robustness
-- Task completion
-- Factual grounding
-- Instruction following
+## Key Point
+
+Both examples use the **same scenes** and **same assertion patterns**:
+
+```python
+assert trace.called("lookup_order")
+assert trace.called("get_return_policy")
+assert not trace.called("create_return")  # Should be denied
+```
+
+The framework adapter (`ADKApp` vs `LangGraphApp`) is the only difference.

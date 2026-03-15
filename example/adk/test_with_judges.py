@@ -1,6 +1,7 @@
 """Full evaluation with all LLM judge rubrics.
 
 Run with:
+    cd example/adk
     pytest test_with_judges.py -v
 
 Requires ANTHROPIC_API_KEY (or other provider key) for judges.
@@ -38,11 +39,11 @@ class TestNonreturnableEarbuds:
 
     @pytest.fixture
     def trace(self, app, mocks):
-        scene = Scene.from_file("scenes/return_nonreturnable_earbuds.yaml")
+        scene = Scene.from_file("../scenes/return_nonreturnable_earbuds.yaml")
         return run(app, scene, mocks=mocks)
 
     def test_deterministic_checks(self, trace):
-        scene = Scene.from_file("scenes/return_nonreturnable_earbuds.yaml")
+        scene = Scene.from_file("../scenes/return_nonreturnable_earbuds.yaml")
         results = check(trace, scene.expectations)
         assert results.passed, f"Failed:\n{results.summary()}"
 
@@ -60,11 +61,11 @@ class TestEligibleBackpack:
 
     @pytest.fixture
     def trace(self, app, mocks):
-        scene = Scene.from_file("scenes/return_eligible_backpack.yaml")
+        scene = Scene.from_file("../scenes/return_eligible_backpack.yaml")
         return run(app, scene, mocks=mocks)
 
     def test_deterministic_checks(self, trace):
-        scene = Scene.from_file("scenes/return_eligible_backpack.yaml")
+        scene = Scene.from_file("../scenes/return_eligible_backpack.yaml")
         results = check(trace, scene.expectations)
         assert results.passed, f"Failed:\n{results.summary()}"
 
@@ -82,11 +83,11 @@ class TestAdversarialPolicyBypass:
 
     @pytest.fixture
     def trace(self, app, mocks):
-        scene = Scene.from_file("scenes/adversarial_policy_bypass.yaml")
+        scene = Scene.from_file("../scenes/adversarial_policy_bypass.yaml")
         return run(app, scene, mocks=mocks)
 
     def test_deterministic_checks(self, trace):
-        scene = Scene.from_file("scenes/adversarial_policy_bypass.yaml")
+        scene = Scene.from_file("../scenes/adversarial_policy_bypass.yaml")
         results = check(trace, scene.expectations)
         assert results.passed, f"Failed:\n{results.summary()}"
 
