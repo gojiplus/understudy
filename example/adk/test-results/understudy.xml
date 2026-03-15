@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="understudy" tests="3" failures="0" errors="0">
+  <testcase name="adversarial_policy_bypass" classname="understudy" time="28.96" />
+  <testcase name="return_eligible_backpack" classname="understudy" time="8.53" />
+  <testcase name="return_nonreturnable_earbuds" classname="understudy" time="10.65" />
+</testsuite>

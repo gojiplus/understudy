@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}understudy - Runs{% endblock %}
+{% block title %}understudy - Report{% endblock %}
 
 {% block content %}
-<h1 class="mb-3">Test Runs</h1>
+<h1 class="mb-3">Evaluation Report</h1>
 
 <div class="metrics-grid">
     <div class="metric-card">
@@ -20,64 +20,40 @@
         <div class="metric-value">{{ "%.1f"|format(summary.avg_turns) }}</div>
         <div class="metric-label">Avg Turns</div>
     </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ "%.0f"|format(summary.avg_latency_per_turn_ms) }}ms</div>
+        <div class="metric-label">Avg Latency/Turn</div>
+    </div>
 </div>
 
-<div class="card">
-    <div class="card-header">Recent Runs</div>
-    <table>
-        <thead>
-            <tr>
-                <th>Scene</th>
-                <th>Status</th>
-                <th>Terminal State</th>
-                <th>Turns</th>
-                <th>Tools</th>
-                <th>Tags</th>
-                <th>Timestamp</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for run in runs %}
-            <tr>
-                <td>
-                    <a href="/run/{{ run.run_id }}">{{ run.scene_id }}</a>
-                </td>
-                <td>
-                    {% if run.passed %}
-                    <span class="badge badge-success">PASS</span>
-                    {% else %}
-                    <span class="badge badge-danger">FAIL</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <span class="badge badge-info">{{ run.terminal_state or "none" }}</span>
-                </td>
-                <td>{{ run.turn_count }}</td>
-                <td>{{ run.tools_called|length }}</td>
-                <td>
-                    {% for key, value in run.tags.items() %}
-                    <span class="badge" style="background: #e2e3e5; color: #383d41;">{{ key }}={{ value }}</span>
-                    {% endfor %}
-                </td>
-                <td class="text-muted">{{ run.timestamp }}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="7" class="text-muted">No runs found.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-value">{{ "%.0f"|format(summary.avg_tokens_per_run) }}</div>
+        <div class="metric-label">Avg Tokens/Run</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ summary.total_tokens }}</div>
+        <div class="metric-label">Total Tokens</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ "%.1f"|format(summary.total_latency_ms / 1000) }}s</div>
+        <div class="metric-label">Total Agent Time</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ summary.total_input_tokens }} / {{ summary.total_output_tokens }}</div>
+        <div class="metric-label">Input / Output Tokens</div>
+    </div>
 </div>
 
 {% if summary.tool_usage %}
 <div class="card">
-    <div class="card-header">Tool Usage</div>
+    <div class="card-header">Tool Usage (Aggregate)</div>
     <table>
         <thead>
             <tr>
                 <th>Tool</th>
-                <th>Calls</th>
+                <th>Total Calls</th>
+                <th>Avg per Run</th>
             </tr>
         </thead>
         <tbody>
@@ -85,6 +61,7 @@
             <tr>
                 <td><code>{{ tool }}</code></td>
                 <td>{{ count }}</td>
+                <td>{{ "%.1f"|format(count / summary.total_runs) }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -100,6 +77,7 @@
             <tr>
                 <th>State</th>
                 <th>Count</th>
+                <th>Percentage</th>
             </tr>
         </thead>
         <tbody>
@@ -107,10 +85,91 @@
             <tr>
                 <td><span class="badge badge-info">{{ state }}</span></td>
                 <td>{{ count }}</td>
+                <td>{{ "%.0f"|format(count / summary.total_runs * 100) }}%</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 {% endif %}
+
+{% if summary.agents %}
+<div class="card">
+    <div class="card-header">Agent Invocations</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Agent</th>
+                <th>Invocations</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for agent, count in summary.agents.items() %}
+            <tr>
+                <td><code>{{ agent }}</code></td>
+                <td>{{ count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header" style="cursor: pointer;" onclick="document.getElementById('runs-table').classList.toggle('collapsed');">
+        Per-Run Details <span style="float: right;">▼</span>
+    </div>
+    <div id="runs-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Scene</th>
+                    <th>Status</th>
+                    <th>Terminal State</th>
+                    <th>Turns</th>
+                    <th>Tools</th>
+                    <th>Tags</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in runs %}
+                <tr>
+                    <td>
+                        <a href="/run/{{ run.run_id }}">{{ run.scene_id }}</a>
+                    </td>
+                    <td>
+                        {% if run.passed %}
+                        <span class="badge badge-success">PASS</span>
+                        {% else %}
+                        <span class="badge badge-danger">FAIL</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge-info">{{ run.terminal_state or "none" }}</span>
+                    </td>
+                    <td>{{ run.turn_count }}</td>
+                    <td>{{ run.tools_called|length }}</td>
+                    <td>
+                        {% for key, value in run.tags.items() %}
+                        <span class="badge" style="background: #e2e3e5; color: #383d41;">{{ key }}={{ value }}</span>
+                        {% endfor %}
+                    </td>
+                    <td class="text-muted">{{ run.timestamp }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-muted">No runs found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+    #runs-table.collapsed {
+        display: none;
+    }
+</style>
 {% endblock %}

@@ -33,6 +33,55 @@
     </div>
 </div>
 
+{% if trace.metrics and trace.metrics.turns %}
+<div class="card">
+    <div class="card-header">Performance Metrics</div>
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-value">{{ trace.metrics.total_tokens }}</div>
+            <div class="metric-label">Total Tokens</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ "%.1f"|format(trace.metrics.agent_time_ms / 1000) }}s</div>
+            <div class="metric-label">Total Agent Time</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ "%.0f"|format(trace.metrics.avg_turn_latency_ms) }}ms</div>
+            <div class="metric-label">Avg Turn Latency</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ trace.metrics.total_input_tokens }} / {{ trace.metrics.total_output_tokens }}</div>
+            <div class="metric-label">Input / Output Tokens</div>
+        </div>
+    </div>
+
+    <table style="margin-top: 15px;">
+        <thead>
+            <tr>
+                <th>Turn</th>
+                <th>Role</th>
+                <th>Input Tokens</th>
+                <th>Output Tokens</th>
+                <th>Thinking Tokens</th>
+                <th>Latency</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for turn_metric in trace.metrics.turns %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ trace.turns[loop.index0].role if loop.index0 < trace.turns|length else '-' }}</td>
+                <td>{{ turn_metric.input_tokens }}</td>
+                <td>{{ turn_metric.output_tokens }}</td>
+                <td>{{ turn_metric.thinking_tokens or 0 }}</td>
+                <td>{{ turn_metric.latency_ms }}ms</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {% if metadata.tags %}
 <div class="mb-3">
     <strong>Tags:</strong>
@@ -131,6 +180,9 @@
         <div class="turn turn-{{ turn.role }}">
             <div class="turn-role">
                 {% if turn.agent_name %}{{ turn.agent_name }}{% else %}{{ turn.role }}{% endif %}
+                {% if turn.timestamp %}
+                <span class="text-muted" style="float: right; font-weight: normal; font-size: 0.75rem;">{{ turn.timestamp.strftime('%H:%M:%S') if turn.timestamp.strftime else turn.timestamp }}</span>
+                {% endif %}
             </div>
             <div class="turn-content">{{ turn.content }}</div>
             {% for call in turn.tool_calls %}

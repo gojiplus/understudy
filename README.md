@@ -104,9 +104,9 @@ Or with pytest (define `app` and `mocks` fixtures in conftest.py):
 pytest test_returns.py -v
 ```
 
-## Suites with Tags
+## Suites and Batch Runs
 
-Run multiple scenes and tag runs for comparison:
+Run multiple scenes with multiple simulations per scene:
 
 ```python
 from understudy import Suite, RunStorage
@@ -114,32 +114,97 @@ from understudy import Suite, RunStorage
 suite = Suite.from_directory("scenes/")
 storage = RunStorage()
 
-# Tag runs for later comparison
-results = suite.run(app, mocks=mocks, storage=storage, tags={"version": "v1"})
+# Run each scene 3 times and tag for comparison
+results = suite.run(
+    app,
+    mocks=mocks,
+    storage=storage,
+    n_sims=3,
+    tags={"version": "v1"},
+)
 print(f"{results.pass_count}/{len(results.results)} passed")
+```
+
+## Simulation and Evaluation
+
+Understudy separates simulation (generating traces) from evaluation (checking traces). Use together or separately:
+
+### Combined (most common)
+
+```bash
+understudy run \
+  --app mymodule:agent_app \
+  --scene ./scenes/ \
+  --n-sims 3 \
+  --junit results.xml
+```
+
+### Separate workflows
+
+Generate traces only:
+
+```bash
+understudy simulate \
+  --app mymodule:agent_app \
+  --scenes ./scenes/ \
+  --output ./traces/ \
+  --n-sims 3
+```
+
+Evaluate existing traces:
+
+```bash
+understudy evaluate \
+  --traces ./traces/ \
+  --output ./results/ \
+  --junit results.xml
+```
+
+Python API:
+
+```python
+from understudy import simulate_batch, evaluate_batch
+
+# Generate traces
+traces = simulate_batch(
+    app=agent_app,
+    scenes="./scenes/",
+    n_sims=3,
+    output="./traces/",
+)
+
+# Evaluate later
+results = evaluate_batch(
+    traces="./traces/",
+    output="./results/",
+)
 ```
 
 ## CLI Commands
 
 ```bash
-# List runs (shows tags)
+# Run simulations
+understudy run --app mymodule:app --scene ./scenes/
+understudy simulate --app mymodule:app --scenes ./scenes/
+understudy evaluate --traces ./traces/
+
+# View results
 understudy list
-
-# Show run details
 understudy show <run_id>
-
-# Aggregate metrics
 understudy summary
 
 # Compare runs by tag
 understudy compare --tag version --before v1 --after v2
 
-# Generate HTML reports
+# Generate reports
 understudy report -o report.html
 understudy compare --tag version --before v1 --after v2 --html comparison.html
 
 # Interactive browser
 understudy serve --port 8080
+
+# HTTP simulator server (for browser/UI testing)
+understudy serve-api --port 8000
 
 # Cleanup
 understudy delete <run_id>
@@ -177,10 +242,10 @@ from understudy.judges import (
 ## Report Contents
 
 The `understudy summary` command shows:
-- **Pass rate** - percentage of scenes that passed all expectations
-- **Avg turns** - average conversation length
-- **Tool usage** - distribution of tool calls across runs
-- **Agents** - which agents were invoked
+- **Pass rate** — percentage of scenes that passed all expectations
+- **Avg turns** — average conversation length
+- **Tool usage** — distribution of tool calls across runs
+- **Agents** — which agents were invoked
 
 The HTML report (`understudy report`) includes:
 - All metrics above
@@ -195,6 +260,7 @@ See the [full documentation](https://gojiplus.github.io/understudy) for:
 - [Installation guide](https://gojiplus.github.io/understudy/installation.html)
 - [Writing scenes](https://gojiplus.github.io/understudy/tutorial/scenes.html)
 - [ADK integration](https://gojiplus.github.io/understudy/adk-integration.html)
+- [LangGraph integration](https://gojiplus.github.io/understudy/langgraph-integration.html)
 - [HTTP client for deployed agents](https://gojiplus.github.io/understudy/tutorial/http.html)
 - [API reference](https://gojiplus.github.io/understudy/api/index.html)
 

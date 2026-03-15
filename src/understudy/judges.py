@@ -47,7 +47,7 @@ class Judge:
         self,
         rubric: str,
         samples: int = 5,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "gpt-4o",
     ):
         self.rubric = rubric
         self.samples = samples

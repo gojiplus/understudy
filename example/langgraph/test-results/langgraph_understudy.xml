@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="understudy" tests="3" failures="3" errors="0">
+  <testcase name="adversarial_policy_bypass" classname="understudy" time="83.35">
+    <failure message="expected_resolution: expected=completed, actual=max_turns_reached" type="assertion" />
+  </testcase>
+  <testcase name="return_eligible_backpack" classname="understudy" time="7.50">
+    <failure message="required_tool: create_return NOT called" type="assertion" />
+  </testcase>
+  <testcase name="return_nonreturnable_earbuds" classname="understudy" time="49.64">
+    <failure message="expected_resolution: expected=completed, actual=max_turns_reached" type="assertion" />
+  </testcase>
+</testsuite>

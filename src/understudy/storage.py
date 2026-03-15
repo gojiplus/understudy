@@ -202,6 +202,25 @@ class RunStorage:
             for agent in r.get("metadata", {}).get("agents_invoked", []):
                 agent_counts[agent] = agent_counts.get(agent, 0) + 1
 
+        # Aggregate performance metrics from traces
+        total_tokens = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_thinking_tokens = 0
+        total_latency_ms = 0
+        turn_count_with_metrics = 0
+
+        for r in runs:
+            trace = r.get("trace")
+            if trace and hasattr(trace, "metrics") and trace.metrics:
+                metrics = trace.metrics
+                total_tokens += metrics.total_tokens
+                total_input_tokens += metrics.total_input_tokens
+                total_output_tokens += metrics.total_output_tokens
+                total_thinking_tokens += metrics.total_thinking_tokens
+                total_latency_ms += metrics.agent_time_ms
+                turn_count_with_metrics += len(metrics.turns)
+
         return {
             "total_runs": len(runs),
             "pass_rate": passed / len(runs) if runs else 0.0,
@@ -209,6 +228,14 @@ class RunStorage:
             "tool_usage": tool_counts,
             "terminal_states": terminal_counts,
             "agents": agent_counts,
+            "total_tokens": total_tokens,
+            "total_input_tokens": total_input_tokens,
+            "total_output_tokens": total_output_tokens,
+            "total_thinking_tokens": total_thinking_tokens,
+            "total_latency_ms": total_latency_ms,
+            "avg_tokens_per_run": total_tokens / len(runs) if runs else 0,
+            "avg_latency_per_run_ms": total_latency_ms / len(runs) if runs else 0,
+            "avg_latency_per_turn_ms": total_latency_ms / turn_count_with_metrics if turn_count_with_metrics else 0,
         }
 
 
