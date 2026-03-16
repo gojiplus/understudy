@@ -653,6 +653,94 @@ class TestSuite:
         assert run_data["metadata"]["tags"] == {"version": "v1", "model": "gpt-4"}
 
 
+class TestAgentEndsConversation:
+    """Tests for agent-initiated conversation termination."""
+
+    def test_agent_terminal_state_ends_conversation(self):
+        """Agent setting terminal_state ends conversation without simulator involvement."""
+        from understudy.runner import run
+
+        class AgentThatEnds:
+            def start(self, mocks=None):
+                pass
+
+            def send(self, message: str) -> AgentResponse:
+                return AgentResponse(content="Goodbye!", terminal_state="agent_ended")
+
+            def stop(self):
+                pass
+
+        class SimulatorThatNeverFinishes:
+            def generate(self, prompt: str) -> str:
+                return "I want to keep talking!"
+
+        scene = Scene(
+            id="agent_ends_test",
+            starting_prompt="hello",
+            conversation_plan="test agent ending",
+            persona=Persona(description="persistent user"),
+            max_turns=10,
+        )
+
+        app = AgentThatEnds()
+        trace = run(app, scene, simulator_backend=SimulatorThatNeverFinishes())
+
+        assert trace.terminal_state == "agent_ended"
+        assert trace.turn_count == 2
+
+    def test_agent_terminal_state_priority_over_simulator(self):
+        """Agent terminal_state takes priority - set even if simulator would continue."""
+        from understudy.runner import run
+
+        class AgentWithCustomTerminalState:
+            def start(self, mocks=None):
+                pass
+
+            def send(self, message: str) -> AgentResponse:
+                return AgentResponse(content="Done!", terminal_state="task_completed")
+
+            def stop(self):
+                pass
+
+        scene = Scene(
+            id="priority_test",
+            starting_prompt="hello",
+            conversation_plan="test priority",
+            persona=Persona(description="user"),
+        )
+
+        app = AgentWithCustomTerminalState()
+        trace = run(app, scene, simulator_backend=MockSimulatorBackend())
+
+        assert trace.terminal_state == "task_completed"
+
+    def test_no_agent_terminal_state_lets_simulator_decide(self):
+        """Without agent terminal_state, simulator controls conversation end."""
+        from understudy.runner import run
+
+        class AgentWithoutTerminalState:
+            def start(self, mocks=None):
+                pass
+
+            def send(self, message: str) -> AgentResponse:
+                return AgentResponse(content="Hello!")
+
+            def stop(self):
+                pass
+
+        scene = Scene(
+            id="simulator_decides_test",
+            starting_prompt="hello",
+            conversation_plan="test",
+            persona=Persona(description="user"),
+        )
+
+        app = AgentWithoutTerminalState()
+        trace = run(app, scene, simulator_backend=MockSimulatorBackend())
+
+        assert trace.terminal_state == "completed"
+
+
 # --- Metrics ---
 
 

@@ -194,6 +194,12 @@ def run(
             if response.agent_transfers:
                 trace.agent_transfers.extend(response.agent_transfers)
 
+            # agent hangs up - agent signaled conversation is over
+            if response.terminal_state:
+                trace.terminal_state = response.terminal_state
+                logger.info("Scene %s: agent ended (%s)", scene.id, response.terminal_state)
+                break
+
             # generate next user turn - simulator decides if conversation continues
             next_turn = simulator.next_turn(history)
             if next_turn is None:

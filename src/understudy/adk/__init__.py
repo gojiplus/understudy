@@ -218,6 +218,15 @@ class ADKApp(AgentApp):
                 output_tokens += getattr(usage, "candidates_token_count", 0) or 0
                 thinking_tokens += getattr(usage, "thoughts_token_count", 0) or 0
 
+            # detect if agent signaled conversation end via escalate action
+            if (
+                hasattr(event, "actions")
+                and event.actions
+                and getattr(event.actions, "escalate", False)
+            ):
+                terminal_state = "agent_ended"
+                logger.debug("Agent escalated (ended conversation)")
+
         self._current_agent = current_agent_name
 
         # capture state snapshot from session

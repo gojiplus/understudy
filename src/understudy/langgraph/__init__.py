@@ -129,7 +129,7 @@ class LangGraphApp(AgentApp):
                                         call.result = msg.content
                                         break
 
-        # capture state snapshot from graph
+        # capture state snapshot from graph and detect END node
         state_snapshot = None
         try:
             graph_state = self.graph.get_state(config)
@@ -137,6 +137,11 @@ class LangGraphApp(AgentApp):
                 state_values = graph_state.values
                 if isinstance(state_values, dict):
                     state_snapshot = {k: v for k, v in state_values.items() if k != "messages"}
+
+            # detect if graph reached END node (no next steps)
+            if graph_state and hasattr(graph_state, "next") and not graph_state.next:
+                terminal_state = "agent_ended"
+                logger.debug("Graph reached END node")
         except Exception as e:
             logger.debug("Failed to capture graph state: %s", e)
 
