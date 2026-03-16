@@ -1,10 +1,8 @@
 """Built-in metrics: standard evaluation metrics."""
 
+from ..models import Expectations
+from ..trace import Trace
 from .registry import MetricRegistry, MetricResult
-
-if True:
-    from ..models import Expectations
-    from ..trace import Trace
 
 
 @MetricRegistry.register("efficiency", description="Token and latency efficiency metrics")

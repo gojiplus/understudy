@@ -322,8 +322,8 @@ class TraceStorage:
         trace_file = self.path / f"{trace_id}.json"
 
         data = {
-            "trace": json.loads(trace.model_dump_json()),
-            "scene": json.loads(scene.model_dump_json()),
+            "trace": trace.model_dump(mode="json"),
+            "scene": scene.model_dump(mode="json"),
             "metadata": {
                 "trace_id": trace_id,
                 "scene_id": trace.scene_id,

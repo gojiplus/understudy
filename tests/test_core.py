@@ -1024,3 +1024,268 @@ class TestSuiteWithNSims:
         results = suite.run(app, storage=storage, n_sims=2)
 
         assert len(results.results) == 4
+
+
+# --- simulate_batch Tests ---
+
+
+class TestSimulateBatch:
+    def test_simulate_batch_from_list(self, tmp_path):
+        from understudy import simulate_batch
+
+        scenes = [
+            Scene(
+                id=f"batch_scene_{i}",
+                starting_prompt="hello",
+                conversation_plan="greet",
+                persona=Persona(description="friendly"),
+            )
+            for i in range(2)
+        ]
+
+        app = MockAgentApp()
+        traces = simulate_batch(app, scenes, n_sims=1, parallel=1)
+
+        assert len(traces) == 2
+        assert all(t.scene_id.startswith("batch_scene_") for t in traces)
+
+    def test_simulate_batch_with_n_sims(self, tmp_path):
+        from understudy import simulate_batch
+
+        scene = Scene(
+            id="nsims_batch_scene",
+            starting_prompt="hello",
+            conversation_plan="greet",
+            persona=Persona(description="friendly"),
+        )
+
+        app = MockAgentApp()
+        traces = simulate_batch(app, [scene], n_sims=3, parallel=1)
+
+        assert len(traces) == 3
+        assert all(t.scene_id == "nsims_batch_scene" for t in traces)
+
+    def test_simulate_batch_with_output(self, tmp_path):
+        from understudy import simulate_batch
+
+        scene = Scene(
+            id="output_scene",
+            starting_prompt="hello",
+            conversation_plan="greet",
+            persona=Persona(description="friendly"),
+        )
+
+        output_path = tmp_path / "traces"
+        app = MockAgentApp()
+        traces = simulate_batch(app, [scene], n_sims=2, output=output_path)
+
+        assert len(traces) == 2
+
+        storage = TraceStorage(path=output_path)
+        saved_traces = storage.list_traces()
+        assert len(saved_traces) == 2
+
+    def test_simulate_batch_with_tags(self, tmp_path):
+        from understudy import simulate_batch
+
+        scene = Scene(
+            id="tagged_scene",
+            starting_prompt="hello",
+            conversation_plan="greet",
+            persona=Persona(description="friendly"),
+        )
+
+        output_path = tmp_path / "traces"
+        app = MockAgentApp()
+        simulate_batch(app, [scene], n_sims=1, output=output_path, tags={"version": "v1"})
+
+        storage = TraceStorage(path=output_path)
+        trace_id = storage.list_traces()[0]
+        data = storage.load(trace_id)
+        assert data["metadata"]["tags"] == {"version": "v1"}
+
+    def test_simulate_batch_from_directory(self, tmp_path):
+        import yaml
+
+        from understudy import simulate_batch
+
+        scenes_dir = tmp_path / "scenes"
+        scenes_dir.mkdir()
+
+        for i in range(2):
+            scene_data = {
+                "id": f"file_scene_{i}",
+                "starting_prompt": "hello",
+                "conversation_plan": "greet",
+                "persona": "cooperative",
+            }
+            (scenes_dir / f"scene_{i}.yaml").write_text(yaml.dump(scene_data))
+
+        app = MockAgentApp()
+        traces = simulate_batch(app, scenes_dir, n_sims=1, parallel=1)
+
+        assert len(traces) == 2
+
+    def test_simulate_batch_from_single_file(self, tmp_path):
+        import yaml
+
+        from understudy import simulate_batch
+
+        scene_data = {
+            "id": "single_file_scene",
+            "starting_prompt": "hello",
+            "conversation_plan": "greet",
+            "persona": "cooperative",
+        }
+        scene_file = tmp_path / "scene.yaml"
+        scene_file.write_text(yaml.dump(scene_data))
+
+        app = MockAgentApp()
+        traces = simulate_batch(app, scene_file, n_sims=1)
+
+        assert len(traces) == 1
+        assert traces[0].scene_id == "single_file_scene"
+
+    def test_simulate_batch_parallel(self, tmp_path):
+        from understudy import simulate_batch
+
+        scenes = [
+            Scene(
+                id=f"parallel_scene_{i}",
+                starting_prompt="hello",
+                conversation_plan="greet",
+                persona=Persona(description="friendly"),
+            )
+            for i in range(3)
+        ]
+
+        app = MockAgentApp()
+        traces = simulate_batch(app, scenes, n_sims=1, parallel=2)
+
+        assert len(traces) == 3
+
+    def test_simulate_batch_with_mocks(self, tmp_path):
+        from understudy import MockToolkit, simulate_batch
+
+        scene = Scene(
+            id="mock_scene",
+            starting_prompt="hello",
+            conversation_plan="greet",
+            persona=Persona(description="friendly"),
+        )
+
+        mocks = MockToolkit()
+
+        @mocks.handle("test_tool")
+        def test_tool():
+            return "mocked result"
+
+        app = MockAgentApp()
+        traces = simulate_batch(app, [scene], n_sims=1, mocks=mocks)
+
+        assert len(traces) == 1
+
+
+# --- evaluate_batch comprehensive tests ---
+
+
+class TestEvaluateBatchComprehensive:
+    def test_evaluate_batch_parallel(self, tmp_path):
+        traces = [
+            Trace(
+                scene_id=f"parallel_eval_{i}",
+                turns=[Turn(role="agent", content="done")],
+                terminal_state="completed",
+            )
+            for i in range(4)
+        ]
+        expectations = Expectations(expected_resolution="completed")
+
+        results = evaluate_batch(traces, expectations=expectations, parallel=2)
+
+        assert len(results) == 4
+        assert all(r.passed for r in results)
+
+    def test_evaluate_batch_with_output(self, tmp_path):
+        traces = [
+            Trace(
+                scene_id="output_eval",
+                turns=[Turn(role="agent", content="done")],
+                terminal_state="completed",
+            )
+        ]
+        expectations = Expectations(expected_resolution="completed")
+        output_path = tmp_path / "results"
+
+        results = evaluate_batch(traces, expectations=expectations, output=output_path)
+
+        assert len(results) == 1
+        result_storage = EvaluationStorage(path=output_path)
+        assert len(result_storage.list_results()) == 1
+
+    def test_evaluate_batch_with_metrics(self, tmp_path):
+        from understudy.trace import TraceMetrics, TurnMetrics
+
+        traces = [
+            Trace(
+                scene_id="metrics_eval",
+                turns=[Turn(role="agent", content="done")],
+                terminal_state="completed",
+                metrics=TraceMetrics(
+                    turns=[TurnMetrics(input_tokens=100, output_tokens=50, latency_ms=500)]
+                ),
+            )
+        ]
+        expectations = Expectations()
+
+        results = evaluate_batch(traces, expectations=expectations, metrics=["efficiency"])
+
+        assert len(results) == 1
+        assert "efficiency" in results[0].check_result.metrics
+
+    def test_evaluate_batch_handles_exceptions(self, tmp_path):
+        class BadTrace:
+            scene_id = "bad"
+
+        traces = [BadTrace()]  # type: ignore
+        expectations = Expectations()
+
+        results = evaluate_batch(traces, expectations=expectations)  # type: ignore
+
+        assert len(results) == 1
+        assert results[0].error is not None
+        assert "Traceback" in results[0].error
+
+    def test_evaluate_batch_mixed_results(self, tmp_path):
+        traces = [
+            Trace(
+                scene_id="pass",
+                turns=[Turn(role="agent", content="done")],
+                terminal_state="completed",
+            ),
+            Trace(
+                scene_id="fail",
+                turns=[Turn(role="agent", content="fail")],
+                terminal_state="failed",
+            ),
+        ]
+        expectations = Expectations(expected_resolution="completed")
+
+        results = evaluate_batch(traces, expectations=expectations)
+
+        assert len(results) == 2
+        passed = sum(1 for r in results if r.passed)
+        assert passed == 1
+
+    def test_evaluate_batch_without_expectations(self, tmp_path):
+        traces = [
+            Trace(
+                scene_id="no_exp",
+                turns=[Turn(role="agent", content="done")],
+            )
+        ]
+
+        results = evaluate_batch(traces)
+
+        assert len(results) == 1
+        assert results[0].passed

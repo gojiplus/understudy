@@ -277,4 +277,5 @@ class ReportGenerator:
             server.serve_forever()
         except KeyboardInterrupt:
             print("\nShutting down...")
+        finally:
             server.shutdown()

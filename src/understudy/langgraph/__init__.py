@@ -137,8 +137,8 @@ class LangGraphApp(AgentApp):
                 state_values = graph_state.values
                 if isinstance(state_values, dict):
                     state_snapshot = {k: v for k, v in state_values.items() if k != "messages"}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to capture graph state: %s", e)
 
         return AgentResponse(
             content=final_content,

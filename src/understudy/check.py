@@ -160,19 +160,20 @@ def evaluate(
     judge_model: str | None = None,
     judges: dict[str, Any] | None = None,
 ) -> CheckResult:
-    """Evaluate a trace against expectations.
+    """Evaluate a trace against expectations with optional judge evaluations.
 
-    This is an alias for check() with clearer naming for the evaluate workflow.
+    Extends check() with support for overriding metrics and adding LLM judge
+    evaluations.
 
     Args:
         trace: The execution trace to evaluate.
         expectations: The expectations to check against.
         metrics: Override metrics to compute (defaults to scene's metrics).
         judge_model: Optional LLM model for judge evaluations.
-        judges: Optional pre-configured judge objects.
+        judges: Optional pre-configured judge objects (dict of name -> Judge).
 
     Returns:
-        A CheckResult with check outcomes and metrics.
+        A CheckResult with check outcomes, metrics, and judge results.
     """
     if metrics:
         expectations = Expectations(
@@ -271,10 +272,12 @@ def evaluate_batch(
                 result_storage.save(trace_id=trace_id, check_result=check_result)
             return EvaluationResult(trace_id=trace_id, check_result=check_result)
         except Exception as e:
+            import traceback
+
             return EvaluationResult(
                 trace_id=trace_id,
                 check_result=CheckResult(),
-                error=str(e),
+                error=f"{type(e).__name__}: {e}\n{traceback.format_exc()}",
             )
 
     if parallel <= 1:
