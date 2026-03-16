@@ -183,9 +183,7 @@ class FailureAnalyzer:
         metadata = run_data.get("metadata", {})
 
         failed_checks = [
-            c.get("label", "unknown")
-            for c in check.get("checks", [])
-            if not c.get("passed")
+            c.get("label", "unknown") for c in check.get("checks", []) if not c.get("passed")
         ]
 
         if not failed_checks or not trace:

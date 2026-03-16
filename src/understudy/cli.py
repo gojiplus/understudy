@@ -86,11 +86,7 @@ def report(runs: Path, output: Path, analyze_failures: bool, analysis_model: str
     click.echo(f"Found {len(run_ids)} runs")
 
     if analyze_failures:
-        failed = sum(
-            1
-            for r in run_ids
-            if not storage.load(r).get("metadata", {}).get("passed")
-        )
+        failed = sum(1 for r in run_ids if not storage.load(r).get("metadata", {}).get("passed"))
         if failed:
             click.echo(f"Analyzing {failed} failed runs with {analysis_model}...")
 
