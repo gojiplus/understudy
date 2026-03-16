@@ -24,6 +24,7 @@ The key insight: **assert against the trace, not the prose**. Don't check what t
 - [Example scene](https://github.com/gojiplus/understudy/blob/main/example/scenes/return_eligible_backpack.yaml) — YAML defining a test scenario
 - [ADK test file](https://github.com/gojiplus/understudy/blob/main/example/adk/test_returns.py) — pytest assertions against traces
 - [LangGraph test file](https://github.com/gojiplus/understudy/blob/main/example/langgraph/test_returns.py) — same tests, different framework
+- [Example report](https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/example/langgraph/report/index.html) — HTML report with metrics and transcripts
 
 ## Installation
 
@@ -240,8 +241,6 @@ from understudy.judges import (
 ```
 
 ## Report Contents
-
-**[View example report](https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/example/langgraph/report/index.html)**
 
 The `understudy summary` command shows:
 - **Pass rate** — percentage of scenes that passed all expectations
