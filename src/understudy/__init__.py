@@ -9,7 +9,7 @@ from importlib.metadata import version
 
 from .check import CheckItem, CheckResult, EvaluationResult, check, evaluate, evaluate_batch
 from .compare import ComparisonResult, SceneComparison, compare_runs
-from .judges import Judge, JudgeResult
+from .judges import FailureAnalysis, FailureAnalyzer, Judge, JudgeResult
 from .metrics import MetricRegistry, MetricResult
 from .mocks import MockToolkit, ToolError
 from .models import Expectations, Persona, PersonaPreset, Scene
@@ -76,6 +76,8 @@ __all__ = [
     # judges
     "Judge",
     "JudgeResult",
+    "FailureAnalyzer",
+    "FailureAnalysis",
     # mocks
     "MockToolkit",
     "ToolError",

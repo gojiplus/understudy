@@ -61,10 +61,20 @@ def main():
     "--output",
     "-o",
     type=click.Path(path_type=Path),
-    default="report.html",
-    help="Output HTML file path",
+    default="report",
+    help="Output directory for report",
 )
-def report(runs: Path, output: Path):
+@click.option(
+    "--analyze-failures",
+    is_flag=True,
+    help="Use LLM to analyze why failed runs failed",
+)
+@click.option(
+    "--analysis-model",
+    default="gpt-4o",
+    help="Model to use for failure analysis",
+)
+def report(runs: Path, output: Path, analyze_failures: bool, analysis_model: str):
     """Generate a static HTML report from saved runs."""
     storage = RunStorage(path=runs)
 
@@ -75,7 +85,20 @@ def report(runs: Path, output: Path):
 
     click.echo(f"Found {len(run_ids)} runs")
 
-    generator = ReportGenerator(storage)
+    if analyze_failures:
+        failed = sum(
+            1
+            for r in run_ids
+            if not storage.load(r).get("metadata", {}).get("passed")
+        )
+        if failed:
+            click.echo(f"Analyzing {failed} failed runs with {analysis_model}...")
+
+    generator = ReportGenerator(
+        storage,
+        analyze_failures=analyze_failures,
+        analysis_model=analysis_model,
+    )
     generator.generate_static_report(output)
 
     click.echo(f"Report generated: {output}")

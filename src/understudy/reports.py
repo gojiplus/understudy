@@ -9,14 +9,24 @@ from .storage import RunStorage
 class ReportGenerator:
     """Generate HTML reports from saved simulation runs."""
 
-    def __init__(self, storage: RunStorage, static_mode: bool = False):
+    def __init__(
+        self,
+        storage: RunStorage,
+        static_mode: bool = False,
+        analyze_failures: bool = False,
+        analysis_model: str = "gpt-4o",
+    ):
         """
         Args:
             storage: RunStorage instance containing saved runs.
             static_mode: If True, generate relative links for static HTML files.
+            analyze_failures: If True, use LLM to analyze why failed runs failed.
+            analysis_model: Model to use for failure analysis.
         """
         self.storage = storage
         self.static_mode = static_mode
+        self.analyze_failures = analyze_failures
+        self.analysis_model = analysis_model
         self._env = None
 
     def _get_env(self):
@@ -60,24 +70,27 @@ class ReportGenerator:
         )
 
     def generate_index(self) -> str:
-        """Generate summary HTML listing all runs.
-
-        Returns:
-            HTML content as a string.
-        """
+        """Generate summary HTML listing all runs."""
         env = self._get_env()
         runs = []
         failed_runs = []
+
+        analyzer = None
+        if self.analyze_failures:
+            from .judges import FailureAnalyzer
+
+            analyzer = FailureAnalyzer(model=self.analysis_model)
 
         for run_id in self.storage.list_runs():
             data = self.storage.load(run_id)
             meta = data.get("metadata", {})
             check_data = data.get("check", {})
 
-            failed_checks = []
-            for c in check_data.get("checks", []):
-                if not c.get("passed"):
-                    failed_checks.append(c.get("label", "unknown"))
+            failed_checks = [
+                c.get("label", "unknown")
+                for c in check_data.get("checks", [])
+                if not c.get("passed")
+            ]
 
             run_info = {
                 "run_id": run_id,
@@ -89,10 +102,14 @@ class ReportGenerator:
                 "tags": meta.get("tags", {}),
                 "timestamp": meta.get("timestamp", ""),
                 "failed_checks": failed_checks,
+                "analysis": None,
             }
             runs.append(run_info)
 
             if not meta.get("passed"):
+                if analyzer:
+                    result = analyzer.analyze_run(data)
+                    run_info["analysis"] = result.analysis
                 failed_runs.append(run_info)
 
         summary = self.storage.get_summary()

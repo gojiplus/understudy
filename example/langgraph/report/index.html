@@ -288,32 +288,27 @@
 <!-- Failed Runs Section -->
 
 <div class="section-header" style="color: var(--danger);">Failed Runs</div>
-<div class="card">
-    <table>
-        <thead>
-            <tr>
-                <th>Scene</th>
-                <th>Terminal State</th>
-                <th>Turns</th>
-                <th>Failed Checks</th>
-                <th>Timestamp</th>
-            </tr>
-        </thead>
-        <tbody>
-            
-            <tr>
-                <td>
-                    <a href="runs/return_eligible_backpack_20260315_162609_c05802.html">return_eligible_backpack</a>
-                </td>
-                <td><span class="badge badge-info">completed</span></td>
-                <td>16</td>
-                <td>required_tool</td>
-                <td class="text-muted">20260315_162609</td>
-            </tr>
-            
-        </tbody>
-    </table>
+
+<div class="card failure-card">
+    <div class="card-header">
+        <a href="runs/return_eligible_backpack_20260315_162609_c05802.html">return_eligible_backpack</a>
+        <span class="badge badge-danger">FAIL</span>
+    </div>
+    <div class="failure-meta">
+        <span><strong>Checks failed:</strong> required_tool</span>
+        <span class="text-muted">16 turns · completed</span>
+    </div>
+    
+    <div class="failure-analysis">
+        <strong>Analysis:</strong> 1. The conversation failed to use the required tool `create_return` to initiate the return process, despite the user being within the return window. Instead, the agent incorrectly stated that the return window had passed and did not proceed with creating a return request.
+
+2. The root cause of this mistake appears to be a misinterpretation of the delivery date and return window. The agent incorrectly concluded that the order was outside the return window, even though the delivery date was February 28, 2025, and the conversation occurred within 30 days.
+
+3. To fix this issue, the agent&#39;s logic should be updated to correctly calculate the return window based on the delivery date and current date. Implementing a date comparison check to ensure the agent accurately determines whether an item is returnable would prevent this error. Additionally, ensuring the agent proceeds with the `create_return` tool when the return is valid will align with the expected resolution.
+    </div>
+    
 </div>
+
 
 
 <!-- Tool Usage & Terminal States -->
@@ -480,6 +475,22 @@
         color: var(--text-secondary);
         border-bottom: 1px solid var(--border-color);
         padding-bottom: 8px;
+    }
+    .failure-card {
+        border-left: 4px solid var(--danger);
+    }
+    .failure-meta {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        font-size: 0.9rem;
+    }
+    .failure-analysis {
+        background: var(--bg-primary);
+        padding: 12px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        line-height: 1.5;
     }
     .two-column-grid {
         display: grid;

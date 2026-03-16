@@ -4,6 +4,23 @@ from dataclasses import dataclass
 
 from .trace import Trace
 
+FAILURE_ANALYSIS_PROMPT = """\
+You are analyzing why an AI agent conversation failed its evaluation.
+
+The conversation was evaluated against these expectations:
+{expectations}
+
+The following checks FAILED:
+{failed_checks}
+
+Analyze the conversation and explain:
+1. What went wrong (be specific, cite the turn or tool call)
+2. Root cause (why did the agent make this mistake)
+3. How to fix it (actionable suggestion)
+
+Keep your analysis concise (3-5 sentences total).
+"""
+
 JUDGE_SYSTEM_PROMPT = """\
 You are evaluating the quality of an AI agent's conversation with a user.
 You will be given the full conversation transcript including tool calls.
@@ -103,3 +120,97 @@ class Judge:
         content = response.choices[0].message.content  # type: ignore[union-attr]
         text = (content or "").strip().upper()
         return 1 if text.startswith("YES") else 0
+
+
+@dataclass
+class FailureAnalysis:
+    """Analysis of why a run failed."""
+
+    run_id: str
+    scene_id: str
+    failed_checks: list[str]
+    analysis: str
+
+
+class FailureAnalyzer:
+    """Analyze failed runs using an LLM to identify root causes.
+
+    Usage::
+
+        analyzer = FailureAnalyzer(model="gpt-4o")
+        analysis = analyzer.analyze(trace, expectations, failed_checks)
+        print(analysis.analysis)
+    """
+
+    def __init__(self, model: str = "gpt-4o"):
+        self.model = model
+
+    def analyze(
+        self,
+        trace: Trace,
+        expectations_text: str,
+        failed_checks: list[str],
+    ) -> str:
+        """Analyze why a trace failed and return explanation."""
+        conversation = trace.conversation_text()
+
+        prompt = FAILURE_ANALYSIS_PROMPT.format(
+            expectations=expectations_text,
+            failed_checks="\n".join(f"- {c}" for c in failed_checks),
+        )
+
+        full_prompt = f"{prompt}\n\nCONVERSATION TRANSCRIPT:\n{conversation}"
+
+        try:
+            import litellm
+        except ImportError:
+            return "LLM analysis unavailable (litellm not installed)"
+
+        response = litellm.completion(
+            model=self.model,
+            max_tokens=500,
+            temperature=0.3,
+            messages=[{"role": "user", "content": full_prompt}],
+        )
+        content = response.choices[0].message.content  # type: ignore[union-attr]
+        return (content or "No analysis available").strip()
+
+    def analyze_run(self, run_data: dict) -> FailureAnalysis:
+        """Analyze a failed run from storage data."""
+        trace: Trace | None = run_data.get("trace")
+        scene = run_data.get("scene")
+        check = run_data.get("check", {})
+        metadata = run_data.get("metadata", {})
+
+        failed_checks = [
+            c.get("label", "unknown")
+            for c in check.get("checks", [])
+            if not c.get("passed")
+        ]
+
+        if not failed_checks or not trace:
+            return FailureAnalysis(
+                run_id=metadata.get("run_id", "unknown"),
+                scene_id=metadata.get("scene_id", "unknown"),
+                failed_checks=failed_checks,
+                analysis="No trace available for analysis." if not trace else "No failures.",
+            )
+
+        expectations_text = ""
+        if scene:
+            exp = scene.expectations
+            if exp.required_tools:
+                expectations_text += f"Required tools: {exp.required_tools}\n"
+            if exp.forbidden_tools:
+                expectations_text += f"Forbidden tools: {exp.forbidden_tools}\n"
+            if exp.expected_resolution:
+                expectations_text += f"Expected resolution: {exp.expected_resolution}\n"
+
+        analysis = self.analyze(trace, expectations_text, failed_checks)
+
+        return FailureAnalysis(
+            run_id=metadata.get("run_id", "unknown"),
+            scene_id=metadata.get("scene_id", "unknown"),
+            failed_checks=failed_checks,
+            analysis=analysis,
+        )

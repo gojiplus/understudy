@@ -89,32 +89,23 @@
 <!-- Failed Runs Section -->
 {% if failed_runs %}
 <div class="section-header" style="color: var(--danger);">Failed Runs</div>
-<div class="card">
-    <table>
-        <thead>
-            <tr>
-                <th>Scene</th>
-                <th>Terminal State</th>
-                <th>Turns</th>
-                <th>Failed Checks</th>
-                <th>Timestamp</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for run in failed_runs %}
-            <tr>
-                <td>
-                    <a href="{% if static_mode %}runs/{{ run.run_id }}.html{% else %}/run/{{ run.run_id }}{% endif %}">{{ run.scene_id }}</a>
-                </td>
-                <td><span class="badge badge-info">{{ run.terminal_state or "none" }}</span></td>
-                <td>{{ run.turn_count }}</td>
-                <td>{{ run.failed_checks|join(", ") if run.failed_checks else "-" }}</td>
-                <td class="text-muted">{{ run.timestamp }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+{% for run in failed_runs %}
+<div class="card failure-card">
+    <div class="card-header">
+        <a href="{% if static_mode %}runs/{{ run.run_id }}.html{% else %}/run/{{ run.run_id }}{% endif %}">{{ run.scene_id }}</a>
+        <span class="badge badge-danger">FAIL</span>
+    </div>
+    <div class="failure-meta">
+        <span><strong>Checks failed:</strong> {{ run.failed_checks|join(", ") }}</span>
+        <span class="text-muted">{{ run.turn_count }} turns · {{ run.terminal_state or "none" }}</span>
+    </div>
+    {% if run.analysis %}
+    <div class="failure-analysis">
+        <strong>Analysis:</strong> {{ run.analysis }}
+    </div>
+    {% endif %}
 </div>
+{% endfor %}
 {% endif %}
 
 <!-- Tool Usage & Terminal States -->
@@ -251,6 +242,22 @@
         color: var(--text-secondary);
         border-bottom: 1px solid var(--border-color);
         padding-bottom: 8px;
+    }
+    .failure-card {
+        border-left: 4px solid var(--danger);
+    }
+    .failure-meta {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        font-size: 0.9rem;
+    }
+    .failure-analysis {
+        background: var(--bg-primary);
+        padding: 12px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        line-height: 1.5;
     }
     .two-column-grid {
         display: grid;
