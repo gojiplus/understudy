@@ -30,7 +30,7 @@ Testing with understudy is **4 steps**:
 3. **Write scenes** — YAML files defining what the simulated user wants and what you expect
 4. **Run and assert** — Execute simulations, check traces, generate reports
 
-The key insight: **assert against the trace, not the prose**. Don't check if the agent said "I've processed your return." Check if it called ``create_return()`` with the right arguments and reached the ``return_created`` terminal state.
+The key insight: **assert against the trace, not the prose**. Don't check if the agent said "I've processed your return." Check if it called ``create_return()`` with the right arguments.
 
 See It In Action
 ----------------
@@ -48,11 +48,9 @@ Browse real examples from the repo:
    === return_eligible_backpack ===
    Turns: 6
    Tool calls: ['lookup_order', 'get_return_policy', 'create_return']
-   Terminal state: return_created
 
      ✓ required_tool: lookup_order called
      ✓ required_tool: create_return called
-     ✓ terminal_state: return_created (allowed)
 
    PASSED
 

@@ -108,6 +108,8 @@ class Expectations(BaseModel):
     required_agent_tools: dict[str, list[str]] = Field(default_factory=dict)
     expected_resolution: str | None = None
     metrics: list[str] = Field(default_factory=list)
+    expected_trajectory: list[str] | None = None
+    trajectory_match_mode: str = "exact"
 
 
 class Scene(BaseModel):

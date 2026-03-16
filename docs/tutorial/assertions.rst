@@ -11,7 +11,7 @@ After running a scene, you get a ``Trace`` that records:
 
 - All turns (user and agent messages)
 - All tool calls with arguments and results
-- The terminal state
+- Run status (completed or max_turns_reached)
 - Timing information
 
 .. code-block:: python
@@ -20,7 +20,7 @@ After running a scene, you get a ``Trace`` that records:
 
    trace.turns           # list of Turn objects
    trace.tool_calls      # flat list of all tool invocations
-   trace.terminal_state  # final resolution state
+   trace.terminal_state  # "completed" or "max_turns_reached"
    trace.turn_count      # number of turns
    trace.duration        # wall clock time
 
@@ -53,16 +53,35 @@ Get the sequence of tool calls:
 
    assert trace.call_sequence() == ["lookup_order", "get_return_policy"]
 
-Terminal State Assertions
--------------------------
+Trajectory Matching
+-------------------
 
-Check the final resolution:
+Compare tool call sequences against expected patterns:
+
+.. code-block:: yaml
+
+   expectations:
+     expected_trajectory: [lookup_order, get_return_policy, create_return]
+     trajectory_match_mode: exact
+
+Match modes:
+
+- **exact**: Sequences must match exactly
+- **prefix**: Expected sequence appears at the start of actual
+- **contains**: Expected tools appear in order within actual (other tools allowed between)
+- **subset**: All expected tools were called (any order)
+
+Use the ``trajectory_match`` metric to evaluate:
 
 .. code-block:: python
 
-   assert trace.terminal_state == "return_denied_policy"
-   # or allow multiple valid outcomes
-   assert trace.terminal_state in {"return_denied_policy", "escalated_to_human"}
+   expectations = Expectations(
+       expected_trajectory=["lookup_order", "get_return_policy"],
+       trajectory_match_mode="contains",
+       metrics=["trajectory_match"],
+   )
+   result = check(trace, expectations)
+   assert result.metrics["trajectory_match"].passed
 
 Bulk Check
 ----------
@@ -82,7 +101,6 @@ The summary shows what passed and failed:
 
    ✓ required_tools: lookup_order, get_return_policy
    ✓ forbidden_tools: create_return (none called)
-   ✗ terminal_state: return_created (expected: return_denied_policy)
 
 Pytest Integration
 ------------------
@@ -100,7 +118,6 @@ understudy is designed to work with pytest:
 
        assert trace.called("get_return_policy")
        assert not trace.called("create_return")
-       assert trace.terminal_state == "return_denied_policy"
 
    @pytest.mark.parametrize("scene_file", [
        "scenes/return_nonreturnable_earbuds.yaml",

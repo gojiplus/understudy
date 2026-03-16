@@ -22,7 +22,6 @@ For agents deployed with a REST endpoint:
    trace = run(app, scene)
 
    assert trace.called("lookup_order")
-   assert trace.terminal_state == "return_created"
 
 Configuration options:
 

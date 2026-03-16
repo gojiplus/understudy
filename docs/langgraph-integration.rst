@@ -108,33 +108,6 @@ LangGraph requires ``MockableToolContext`` to route tool calls through mocks:
 
 The context manager activates mock routing for the duration of the simulation.
 
-Terminal State Convention
--------------------------
-
-understudy needs to know when the agent has finished handling a request. LangGraph agents signal this by emitting a special marker in their response text.
-
-**Convention**: Include ``TERMINAL_STATE: <state>`` in the agent's output.
-
-In your agent's system prompt:
-
-.. code-block:: text
-
-   TERMINAL STATES (emit one when the conversation resolves):
-   - return_created: A return was successfully created
-   - return_denied_policy: Return denied due to policy
-   - escalated_to_human: Conversation handed to human agent
-   - order_info_provided: Customer just wanted order status
-
-The agent should output, for example:
-
-.. code-block:: text
-
-   I've processed your return request. A shipping label has been sent to your email.
-
-   TERMINAL_STATE: return_created
-
-understudy extracts this and populates ``trace.terminal_state``.
-
 State Snapshots
 ---------------
 
@@ -303,16 +276,6 @@ And that your tools have the ``@mockable_tool`` decorator:
    @mockable_tool
    def my_tool(...):
        ...
-
-**No terminal state detected**
-
-Ensure your agent's system prompt includes the ``TERMINAL_STATE:`` convention and the agent actually emits it. Check the raw trace:
-
-.. code-block:: python
-
-   for turn in trace.turns:
-       if turn.role == "agent":
-           print(turn.content)
 
 **Tools returning None**
 

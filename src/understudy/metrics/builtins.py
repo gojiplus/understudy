@@ -55,3 +55,58 @@ def compute_tool_trajectory(trace: "Trace", expectations: "Expectations") -> Met
             "total_calls": len(trace.tool_calls),
         },
     )
+
+
+def _compute_trajectory_score(
+    actual: list[str], expected: list[str], mode: str
+) -> tuple[float, str]:
+    """Compute trajectory match score based on mode."""
+    if mode == "exact":
+        if actual == expected:
+            return 1.0, f"Exact match: {expected}"
+        return 0.0, f"Mismatch: expected {expected}, got {actual}"
+
+    if mode == "prefix":
+        if actual[: len(expected)] == expected:
+            return 1.0, f"Prefix match: {expected}"
+        return 0.0, f"Prefix mismatch: expected {expected} at start"
+
+    if mode == "contains":
+        it = iter(actual)
+        if all(tool in it for tool in expected):
+            return 1.0, f"Contains match: {expected} found in order"
+        return 0.0, f"Contains mismatch: {expected} not found in order"
+
+    if mode == "subset":
+        actual_set = set(actual)
+        if all(tool in actual_set for tool in expected):
+            return 1.0, f"Subset match: all {expected} called"
+        missing = [t for t in expected if t not in actual_set]
+        return 0.0, f"Subset mismatch: missing {missing}"
+
+    return 0.0, f"Unknown mode: {mode}"
+
+
+@MetricRegistry.register("trajectory_match", description="Compare tool sequence against expected")
+def compute_trajectory_match(trace: "Trace", expectations: "Expectations") -> MetricResult:
+    """Check if actual tool sequence matches expected trajectory."""
+    if expectations.expected_trajectory is None:
+        return MetricResult(
+            name="trajectory_match",
+            passed=None,
+            detail="No expected trajectory specified",
+        )
+
+    actual = trace.call_sequence()
+    expected = expectations.expected_trajectory
+    mode = expectations.trajectory_match_mode
+
+    score, detail = _compute_trajectory_score(actual, expected, mode)
+    passed = score == 1.0
+
+    return MetricResult(
+        name="trajectory_match",
+        passed=passed,
+        value={"expected": expected, "actual": actual, "score": score, "mode": mode},
+        detail=detail,
+    )
