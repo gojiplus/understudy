@@ -623,6 +623,13 @@ class MockAgentApp:
         pass
 
 
+class MockSimulatorBackend:
+    """Mock backend for the simulator that returns <finished> immediately."""
+
+    def generate(self, prompt: str) -> str:
+        return "<finished>"
+
+
 class TestSuite:
     def test_run_with_tags(self, tmp_path):
         scene = Scene(
@@ -637,7 +644,7 @@ class TestSuite:
 
         app = MockAgentApp()
         tags = {"version": "v1", "model": "gpt-4"}
-        suite.run(app, storage=storage, tags=tags)
+        suite.run(app, storage=storage, tags=tags, simulator_backend=MockSimulatorBackend())
 
         runs = storage.list_runs()
         assert len(runs) == 1
@@ -998,7 +1005,8 @@ class TestSuiteWithNSims:
         storage = RunStorage(path=tmp_path / "runs")
 
         app = MockAgentApp()
-        results = suite.run(app, storage=storage, n_sims=3)
+        backend = MockSimulatorBackend()
+        results = suite.run(app, storage=storage, n_sims=3, simulator_backend=backend)
 
         assert len(results.results) == 3
         scene_ids = [r.scene_id for r in results.results]
@@ -1021,7 +1029,8 @@ class TestSuiteWithNSims:
         storage = RunStorage(path=tmp_path / "runs")
 
         app = MockAgentApp()
-        results = suite.run(app, storage=storage, n_sims=2)
+        backend = MockSimulatorBackend()
+        results = suite.run(app, storage=storage, n_sims=2, simulator_backend=backend)
 
         assert len(results.results) == 4
 
@@ -1030,6 +1039,18 @@ class TestSuiteWithNSims:
 
 
 class TestSimulateBatch:
+    @pytest.fixture(autouse=True)
+    def mock_litellm(self, monkeypatch):
+        """Mock litellm.completion for all tests in this class."""
+        from unittest.mock import MagicMock
+
+        def mock_completion(*args, **kwargs):
+            response = MagicMock()
+            response.choices = [MagicMock(message=MagicMock(content="<finished>"))]
+            return response
+
+        monkeypatch.setattr("litellm.completion", mock_completion)
+
     def test_simulate_batch_from_list(self, tmp_path):
         from understudy import simulate_batch
 

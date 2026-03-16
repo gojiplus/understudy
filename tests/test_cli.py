@@ -1,5 +1,7 @@
 """Tests for the CLI commands."""
 
+from unittest.mock import MagicMock
+
 import pytest
 from click.testing import CliRunner
 
@@ -226,6 +228,17 @@ class TestCompareCommand:
 
 
 class TestRunCommand:
+    @pytest.fixture(autouse=True)
+    def mock_litellm_for_run(self, monkeypatch):
+        """Mock litellm.completion for all run command tests."""
+
+        def mock_completion(*args, **kwargs):
+            response = MagicMock()
+            response.choices = [MagicMock(message=MagicMock(content="<finished>"))]
+            return response
+
+        monkeypatch.setattr("litellm.completion", mock_completion)
+
     @pytest.fixture
     def scene_file(self, tmp_path):
         scene_content = """\
@@ -526,6 +539,17 @@ def create_mocks():
 
 
 class TestSimulateCommand:
+    @pytest.fixture(autouse=True)
+    def mock_litellm_for_simulate(self, monkeypatch):
+        """Mock litellm.completion for all simulate command tests."""
+
+        def mock_completion(*args, **kwargs):
+            response = MagicMock()
+            response.choices = [MagicMock(message=MagicMock(content="<finished>"))]
+            return response
+
+        monkeypatch.setattr("litellm.completion", mock_completion)
+
     @pytest.fixture
     def scene_file(self, tmp_path):
         scene_content = """\
