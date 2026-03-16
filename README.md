@@ -241,6 +241,8 @@ from understudy.judges import (
 
 ## Report Contents
 
+**[View example report](https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/example/langgraph/report/index.html)**
+
 The `understudy summary` command shows:
 - **Pass rate** — percentage of scenes that passed all expectations
 - **Avg turns** — average conversation length
