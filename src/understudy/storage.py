@@ -168,75 +168,124 @@ class RunStorage:
         return [self.load(run_id) for run_id in self.list_runs()]
 
     def get_summary(self) -> dict[str, Any]:
-        """Get aggregate summary of all runs.
-
-        Returns:
-            Summary statistics including pass rate, tool usage, etc.
-        """
+        """Get aggregate summary of all runs."""
         runs = self.load_all()
-        if not runs:
-            return {
-                "total_runs": 0,
-                "pass_rate": 0.0,
-                "avg_turns": 0.0,
-                "tool_usage": {},
-                "terminal_states": {},
-                "agents": {},
-            }
+        n = len(runs)
+        if n == 0:
+            return self._empty_summary()
 
         passed = sum(1 for r in runs if r.get("metadata", {}).get("passed"))
         total_turns = sum(r.get("metadata", {}).get("turn_count", 0) for r in runs)
 
         tool_counts: dict[str, int] = {}
-        for r in runs:
-            for tool in r.get("metadata", {}).get("tools_called", []):
-                tool_counts[tool] = tool_counts.get(tool, 0) + 1
-
         terminal_counts: dict[str, int] = {}
-        for r in runs:
-            state = r.get("metadata", {}).get("terminal_state", "unknown")
-            terminal_counts[state] = terminal_counts.get(state, 0) + 1
-
         agent_counts: dict[str, int] = {}
+
         for r in runs:
-            for agent in r.get("metadata", {}).get("agents_invoked", []):
+            meta = r.get("metadata", {})
+            for tool in meta.get("tools_called", []):
+                tool_counts[tool] = tool_counts.get(tool, 0) + 1
+            state = meta.get("terminal_state", "unknown")
+            terminal_counts[state] = terminal_counts.get(state, 0) + 1
+            for agent in meta.get("agents_invoked", []):
                 agent_counts[agent] = agent_counts.get(agent, 0) + 1
 
-        # Aggregate performance metrics from traces
-        total_tokens = 0
-        total_input_tokens = 0
-        total_output_tokens = 0
-        total_thinking_tokens = 0
-        total_latency_ms = 0
-        turn_count_with_metrics = 0
-
-        for r in runs:
-            trace = r.get("trace")
-            if trace and hasattr(trace, "metrics") and trace.metrics:
-                metrics = trace.metrics
-                total_tokens += metrics.total_tokens
-                total_input_tokens += metrics.total_input_tokens
-                total_output_tokens += metrics.total_output_tokens
-                total_thinking_tokens += metrics.total_thinking_tokens
-                total_latency_ms += metrics.agent_time_ms
-                turn_count_with_metrics += len(metrics.turns)
+        perf = self._aggregate_performance(runs)
+        t = perf["turns"]
 
         return {
-            "total_runs": len(runs),
-            "pass_rate": passed / len(runs) if runs else 0.0,
-            "avg_turns": total_turns / len(runs) if runs else 0.0,
+            "total_runs": n,
+            "pass_rate": passed / n,
+            "avg_turns": total_turns / n,
             "tool_usage": tool_counts,
             "terminal_states": terminal_counts,
             "agents": agent_counts,
-            "total_tokens": total_tokens,
-            "total_input_tokens": total_input_tokens,
-            "total_output_tokens": total_output_tokens,
-            "total_thinking_tokens": total_thinking_tokens,
-            "total_latency_ms": total_latency_ms,
-            "avg_tokens_per_run": total_tokens / len(runs) if runs else 0,
-            "avg_latency_per_run_ms": total_latency_ms / len(runs) if runs else 0,
-            "avg_latency_per_turn_ms": total_latency_ms / turn_count_with_metrics if turn_count_with_metrics else 0,
+            "total_tokens": perf["tokens"],
+            "total_input_tokens": perf["input"],
+            "total_output_tokens": perf["output"],
+            "total_thinking_tokens": perf["thinking"],
+            "total_latency_ms": perf["latency"],
+            "avg_tokens_per_run": perf["tokens"] / n,
+            "avg_latency_per_run_ms": perf["latency"] / n,
+            "avg_latency_per_turn_ms": perf["latency"] / t if t else 0,
+            "avg_input_tokens_per_turn": perf["input"] / t if t else 0,
+            "avg_output_tokens_per_turn": perf["output"] / t if t else 0,
+            "avg_thinking_tokens_per_turn": perf["thinking"] / t if t else 0,
+            "judge_stats": self._compute_judge_stats(runs),
         }
+
+    def _empty_summary(self) -> dict[str, Any]:
+        return {
+            "total_runs": 0,
+            "pass_rate": 0.0,
+            "avg_turns": 0.0,
+            "tool_usage": {},
+            "terminal_states": {},
+            "agents": {},
+            "total_tokens": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_thinking_tokens": 0,
+            "total_latency_ms": 0,
+            "avg_tokens_per_run": 0,
+            "avg_latency_per_run_ms": 0,
+            "avg_latency_per_turn_ms": 0,
+            "avg_input_tokens_per_turn": 0,
+            "avg_output_tokens_per_turn": 0,
+            "avg_thinking_tokens_per_turn": 0,
+            "judge_stats": {},
+        }
+
+    def _aggregate_performance(self, runs: list[dict[str, Any]]) -> dict[str, int]:
+        tokens = input_tokens = output_tokens = thinking_tokens = latency = turns = 0
+        for r in runs:
+            trace = r.get("trace")
+            if trace and hasattr(trace, "metrics") and trace.metrics:
+                m = trace.metrics
+                tokens += m.total_tokens
+                input_tokens += m.total_input_tokens
+                output_tokens += m.total_output_tokens
+                thinking_tokens += m.total_thinking_tokens
+                latency += m.agent_time_ms
+                turns += len(m.turns)
+        return {
+            "tokens": tokens,
+            "input": input_tokens,
+            "output": output_tokens,
+            "thinking": thinking_tokens,
+            "latency": latency,
+            "turns": turns,
+        }
+
+    def _compute_judge_stats(self, runs: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
+        """Compute aggregate judge statistics across all runs."""
+        rubric_data: dict[str, dict[str, list]] = {}
+
+        for run in runs:
+            judges = run.get("judges", {})
+            for name, result in judges.items():
+                if name not in rubric_data:
+                    rubric_data[name] = {"scores": [], "agreements": []}
+
+                score = result.get("score")
+                if score is not None:
+                    rubric_data[name]["scores"].append(score)
+
+                agreement = result.get("agreement_rate")
+                if agreement is not None:
+                    rubric_data[name]["agreements"].append(agreement)
+
+        result = {}
+        for name, data in rubric_data.items():
+            scores = data["scores"]
+            agreements = data["agreements"]
+            result[name] = {
+                "pass_rate": sum(scores) / len(scores) if scores else 0.0,
+                "avg_agreement": sum(agreements) / len(agreements) if agreements else 0.0,
+                "count": len(scores),
+            }
+
+        return result
 
 
 class TraceStorage:

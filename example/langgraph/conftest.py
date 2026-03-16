@@ -92,8 +92,8 @@ def app(mocks):
 
     Requires OPENAI_API_KEY environment variable to be set.
     """
-    from langchain_openai import ChatOpenAI
     from customer_service_agent import create_customer_service_agent, tools
+    from langchain_openai import ChatOpenAI
 
     model = ChatOpenAI(model="gpt-4o-mini").bind_tools(tools)
     graph = create_customer_service_agent(model)

@@ -1,7 +1,7 @@
 """Metric registry: central registry for evaluation metrics."""
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -38,7 +38,7 @@ class MetricDefinition:
 class MetricRegistry:
     """Central registry for evaluation metrics."""
 
-    _metrics: dict[str, MetricDefinition] = field(default_factory=dict)
+    _metrics: dict[str, MetricDefinition] = {}
     _templates_dir: Path = Path(__file__).parent / "templates"
 
     @classmethod

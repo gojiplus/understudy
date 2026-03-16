@@ -5,6 +5,8 @@
 {% block content %}
 <h1 class="mb-3">Evaluation Report</h1>
 
+<!-- Overview Section -->
+<div class="section-header">Overview</div>
 <div class="metrics-grid">
     <div class="metric-card">
         <div class="metric-value">{{ summary.total_runs }}</div>
@@ -17,51 +19,66 @@
         <div class="metric-label">Pass Rate</div>
     </div>
     <div class="metric-card">
+        <div class="metric-value">{{ failed_runs|length }}</div>
+        <div class="metric-label">Failed Runs</div>
+    </div>
+</div>
+
+<!-- Efficiency Metrics Section -->
+<div class="section-header">Efficiency Metrics</div>
+<div class="metrics-grid">
+    <div class="metric-card">
         <div class="metric-value">{{ "%.1f"|format(summary.avg_turns) }}</div>
-        <div class="metric-label">Avg Turns</div>
+        <div class="metric-label">Avg Turns/Run</div>
     </div>
     <div class="metric-card">
         <div class="metric-value">{{ "%.0f"|format(summary.avg_latency_per_turn_ms) }}ms</div>
         <div class="metric-label">Avg Latency/Turn</div>
     </div>
-</div>
-
-<div class="metrics-grid">
-    <div class="metric-card">
-        <div class="metric-value">{{ "%.0f"|format(summary.avg_tokens_per_run) }}</div>
-        <div class="metric-label">Avg Tokens/Run</div>
-    </div>
-    <div class="metric-card">
-        <div class="metric-value">{{ summary.total_tokens }}</div>
-        <div class="metric-label">Total Tokens</div>
-    </div>
     <div class="metric-card">
         <div class="metric-value">{{ "%.1f"|format(summary.total_latency_ms / 1000) }}s</div>
         <div class="metric-label">Total Agent Time</div>
     </div>
+</div>
+<div class="metrics-grid">
     <div class="metric-card">
-        <div class="metric-value">{{ summary.total_input_tokens }} / {{ summary.total_output_tokens }}</div>
-        <div class="metric-label">Input / Output Tokens</div>
+        <div class="metric-value">{{ "%.0f"|format(summary.avg_input_tokens_per_turn) }}</div>
+        <div class="metric-label">Avg Input Tokens/Turn</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ "%.0f"|format(summary.avg_output_tokens_per_turn) }}</div>
+        <div class="metric-label">Avg Output Tokens/Turn</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ "%.0f"|format(summary.avg_thinking_tokens_per_turn) }}</div>
+        <div class="metric-label">Avg Thinking Tokens/Turn</div>
     </div>
 </div>
 
-{% if summary.tool_usage %}
+<!-- Quality Metrics Section (Judge Results) -->
+{% if summary.judge_stats %}
+<div class="section-header">Quality Metrics (LLM Judges)</div>
 <div class="card">
-    <div class="card-header">Tool Usage (Aggregate)</div>
     <table>
         <thead>
             <tr>
-                <th>Tool</th>
-                <th>Total Calls</th>
-                <th>Avg per Run</th>
+                <th>Rubric</th>
+                <th>Pass Rate</th>
+                <th>Avg Agreement</th>
+                <th>Evaluated</th>
             </tr>
         </thead>
         <tbody>
-            {% for tool, count in summary.tool_usage.items() %}
+            {% for rubric, stats in summary.judge_stats.items() %}
             <tr>
-                <td><code>{{ tool }}</code></td>
-                <td>{{ count }}</td>
-                <td>{{ "%.1f"|format(count / summary.total_runs) }}</td>
+                <td>{{ rubric }}</td>
+                <td>
+                    <span class="badge {% if stats.pass_rate >= 0.8 %}badge-success{% elif stats.pass_rate >= 0.5 %}badge-warning{% else %}badge-danger{% endif %}">
+                        {{ "%.0f"|format(stats.pass_rate * 100) }}%
+                    </span>
+                </td>
+                <td>{{ "%.0f"|format(stats.avg_agreement * 100) }}%</td>
+                <td>{{ stats.count }} runs</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -69,29 +86,87 @@
 </div>
 {% endif %}
 
-{% if summary.terminal_states %}
+<!-- Failed Runs Section -->
+{% if failed_runs %}
+<div class="section-header" style="color: var(--danger);">Failed Runs</div>
 <div class="card">
-    <div class="card-header">Terminal States</div>
     <table>
         <thead>
             <tr>
-                <th>State</th>
-                <th>Count</th>
-                <th>Percentage</th>
+                <th>Scene</th>
+                <th>Terminal State</th>
+                <th>Turns</th>
+                <th>Failed Checks</th>
+                <th>Timestamp</th>
             </tr>
         </thead>
         <tbody>
-            {% for state, count in summary.terminal_states.items() %}
+            {% for run in failed_runs %}
             <tr>
-                <td><span class="badge badge-info">{{ state }}</span></td>
-                <td>{{ count }}</td>
-                <td>{{ "%.0f"|format(count / summary.total_runs * 100) }}%</td>
+                <td>
+                    <a href="{% if static_mode %}runs/{{ run.run_id }}.html{% else %}/run/{{ run.run_id }}{% endif %}">{{ run.scene_id }}</a>
+                </td>
+                <td><span class="badge badge-info">{{ run.terminal_state or "none" }}</span></td>
+                <td>{{ run.turn_count }}</td>
+                <td>{{ run.failed_checks|join(", ") if run.failed_checks else "-" }}</td>
+                <td class="text-muted">{{ run.timestamp }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 {% endif %}
+
+<!-- Tool Usage & Terminal States -->
+<div class="two-column-grid">
+    {% if summary.tool_usage %}
+    <div class="card">
+        <div class="card-header">Tool Usage</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tool</th>
+                    <th>Total</th>
+                    <th>Avg/Run</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tool, count in summary.tool_usage.items() %}
+                <tr>
+                    <td><code>{{ tool }}</code></td>
+                    <td>{{ count }}</td>
+                    <td>{{ "%.1f"|format(count / summary.total_runs) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if summary.terminal_states %}
+    <div class="card">
+        <div class="card-header">Terminal States</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>State</th>
+                    <th>Count</th>
+                    <th>%</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for state, count in summary.terminal_states.items() %}
+                <tr>
+                    <td><span class="badge badge-info">{{ state }}</span></td>
+                    <td>{{ count }}</td>
+                    <td>{{ "%.0f"|format(count / summary.total_runs * 100) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
 
 {% if summary.agents %}
 <div class="card">
@@ -115,9 +190,10 @@
 </div>
 {% endif %}
 
+<!-- All Runs Section -->
 <div class="card">
     <div class="card-header" style="cursor: pointer;" onclick="document.getElementById('runs-table').classList.toggle('collapsed');">
-        Per-Run Details <span style="float: right;">▼</span>
+        All Runs <span style="float: right;">▼</span>
     </div>
     <div id="runs-table">
         <table>
@@ -136,7 +212,7 @@
                 {% for run in runs %}
                 <tr>
                     <td>
-                        <a href="/run/{{ run.run_id }}">{{ run.scene_id }}</a>
+                        <a href="{% if static_mode %}runs/{{ run.run_id }}.html{% else %}/run/{{ run.run_id }}{% endif %}">{{ run.scene_id }}</a>
                     </td>
                     <td>
                         {% if run.passed %}
@@ -168,6 +244,19 @@
 </div>
 
 <style>
+    .section-header {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin: 25px 0 15px 0;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 8px;
+    }
+    .two-column-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 20px;
+    }
     #runs-table.collapsed {
         display: none;
     }

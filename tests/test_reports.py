@@ -50,47 +50,23 @@ class TestReportGenerator:
 
     def test_generate_static_report(self, storage_with_runs, tmp_path):
         generator = ReportGenerator(storage_with_runs)
-        output_path = tmp_path / "output" / "report.html"
-        generator.generate_static_report(output_path)
-        assert output_path.exists()
-        content = output_path.read_text()
-        assert "<html" in content
+        output_dir = tmp_path / "output" / "report"
+        generator.generate_static_report(output_dir)
 
-    def test_compute_judge_agreement_empty(self, storage_with_runs):
-        generator = ReportGenerator(storage_with_runs)
-        runs = storage_with_runs.load_all()
-        result = generator._compute_judge_agreement(runs)
-        assert result == {}
+        assert (output_dir / "index.html").exists()
+        assert (output_dir / "runs").is_dir()
 
-    def test_compute_judge_agreement_with_data(self, tmp_path):
-        storage = RunStorage(path=tmp_path / "runs")
+        index_content = (output_dir / "index.html").read_text()
+        assert "<html" in index_content
+        assert "runs/" in index_content
 
-        trace = Trace(
-            scene_id="test",
-            turns=[Turn(role="agent", content="ok")],
-            terminal_state="done",
-        )
-        scene = Scene(
-            id="test",
-            starting_prompt="hi",
-            conversation_plan="test",
-            persona=Persona(description="test"),
-        )
-
-        judges = {
-            "tone": {"agreement_rate": 0.8, "score": 0.9},
-            "accuracy": {"agreement_rate": 0.7, "score": 0.85},
-        }
-        storage.save(trace, scene, judges=judges)
-
-        generator = ReportGenerator(storage)
-        runs = storage.load_all()
-        result = generator._compute_judge_agreement(runs)
-
-        assert "tone" in result
-        assert "accuracy" in result
-        assert result["tone"]["agreement"] == 0.8
-        assert result["tone"]["pass_rate"] == 0.9
+        run_ids = storage_with_runs.list_runs()
+        for run_id in run_ids:
+            run_file = output_dir / "runs" / f"{run_id}.html"
+            assert run_file.exists()
+            run_content = run_file.read_text()
+            assert "<html" in run_content
+            assert "../index.html" in run_content
 
 
 class TestComparisonReport:

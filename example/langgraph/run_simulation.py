@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from langchain_openai import ChatOpenAI  # noqa: E402
 from customer_service_agent import create_customer_service_agent, tools  # noqa: E402
+from langchain_openai import ChatOpenAI  # noqa: E402
 
 from understudy import Scene, check, run  # noqa: E402
 from understudy.langgraph import LangGraphApp  # noqa: E402
@@ -160,10 +160,10 @@ def main():
         status = "PASS" if did_pass else "FAIL"
         print(f"  [{status}] {scene_id}")
 
-    report_path = Path("langgraph_report.html")
+    report_dir = Path("report")
     generator = ReportGenerator(storage)
-    generator.generate_static_report(report_path)
-    print(f"\nReport generated: {report_path.absolute()}")
+    generator.generate_static_report(report_dir)
+    print(f"\nReport generated: {report_dir.absolute()}/index.html")
 
 
 if __name__ == "__main__":

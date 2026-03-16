@@ -87,6 +87,17 @@ class UISimulator:
             value=starting_prompt,
         )
 
+    def _strip_json_markers(self, text: str) -> str:
+        """Strip markdown code fence markers from JSON response."""
+        text = text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        elif text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        return text.strip()
+
     def next_action(
         self,
         displayed_content: str,
@@ -106,25 +117,15 @@ class UISimulator:
             affordances_json=affordances_json,
         )
 
-        history_text = ""
-        for turn in self.history:
-            role = turn["role"].upper()
-            history_text += f"{role}: {turn['content']}\n"
+        history_text = "\n".join(
+            f"{turn['role'].upper()}: {turn['content']}" for turn in self.history
+        )
 
         full_prompt = (
             self.system_prompt + "\n\nCONVERSATION SO FAR:\n" + history_text + "\n" + action_prompt
         )
 
-        response = self.backend.generate(full_prompt).strip()
-
-        response = response.strip()
-        if response.startswith("```json"):
-            response = response[7:]
-        if response.startswith("```"):
-            response = response[3:]
-        if response.endswith("```"):
-            response = response[:-3]
-        response = response.strip()
+        response = self._strip_json_markers(self.backend.generate(full_prompt))
 
         try:
             data = json.loads(response)

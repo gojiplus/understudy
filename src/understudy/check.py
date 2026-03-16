@@ -3,14 +3,11 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from .metrics import MetricRegistry, MetricResult
 from .models import Expectations
 from .trace import Trace
-
-if TYPE_CHECKING:
-    pass
 
 
 @dataclass
