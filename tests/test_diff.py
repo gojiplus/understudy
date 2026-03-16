@@ -1,8 +1,6 @@
 """Tests for trace diffing functionality."""
 
-import pytest
-
-from understudy import Trace, Turn, ToolCall, diff_traces, TraceDiff, diff_tool_sequences
+from understudy import ToolCall, Trace, Turn, diff_tool_sequences, diff_traces
 
 
 class TestDiffTraces:

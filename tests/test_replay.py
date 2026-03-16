@@ -1,11 +1,8 @@
 """Tests for trace replay functionality."""
 
 import json
-from pathlib import Path
 
-import pytest
-
-from understudy import Trace, Turn, ToolCall, replay, load_trace, ReplayResult
+from understudy import ReplayResult, ToolCall, Trace, Turn, load_trace, replay
 from understudy.runner import AgentResponse
 
 

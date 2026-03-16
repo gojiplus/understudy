@@ -113,7 +113,7 @@ starting_prompt: Hello
 conversation_plan: Do something
 persona: unknown_preset
 """)
-        with pytest.raises(Exception):
+        with pytest.raises((SceneValidationError, ValueError)):
             Scene.from_file(scene_file)
 
         captured = capsys.readouterr()

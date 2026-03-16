@@ -2,8 +2,8 @@
 
 import pytest
 
-from understudy import AssertionHelpers, Trace, ToolCall, Turn
-from understudy.pytest_plugin import pytest_configure, pytest_addoption
+from understudy import AssertionHelpers, ToolCall, Trace, Turn
+from understudy.pytest_plugin import pytest_addoption, pytest_configure
 
 
 class MockConfig:
