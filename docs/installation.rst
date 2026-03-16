@@ -27,6 +27,12 @@ understudy has several optional dependency groups:
 
    pip install understudy[adk]
 
+**LangGraph Integration** (LangChain/LangGraph support):
+
+.. code-block:: bash
+
+   pip install understudy[langgraph]
+
 **LLM Judges** (litellm for 100+ provider support):
 
 .. code-block:: bash

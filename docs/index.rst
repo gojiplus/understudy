@@ -15,6 +15,7 @@ Test your agents with synthetic conversations before they meet real users.
    installation
    quickstart
    adk-integration
+   langgraph-integration
    tutorial/index
    examples/index
    api/index
@@ -37,8 +38,8 @@ See It In Action
 Browse real examples from the repo:
 
 - `Example scene <https://github.com/gojiplus/understudy/blob/main/example/scenes/return_eligible_backpack.yaml>`_ — YAML defining what the simulated user wants
-- `Test file <https://github.com/gojiplus/understudy/blob/main/example/test_returns.py>`_ — pytest assertions against traces
-- `Sample report <https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/example/sample_report.html>`_ — HTML report from ``understudy report``
+- `ADK test file <https://github.com/gojiplus/understudy/blob/main/example/adk/test_returns.py>`_ — pytest assertions against traces
+- `LangGraph test file <https://github.com/gojiplus/understudy/blob/main/example/langgraph/test_returns.py>`_ — same tests, different framework
 
 **What a simulation run looks like:**
 
@@ -61,4 +62,5 @@ Get Started
 1. :doc:`installation` — Install understudy
 2. :doc:`quickstart` — Write your first scene and run a simulation
 3. :doc:`adk-integration` — Full guide for Google ADK agents
-4. :doc:`examples/index` — Complete working example
+4. :doc:`langgraph-integration` — Full guide for LangGraph agents
+5. :doc:`examples/index` — Complete working example
