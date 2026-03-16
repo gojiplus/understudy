@@ -1,7 +1,9 @@
 """Judges: calibrated LLM-as-judge with sampling and majority vote."""
 
+import asyncio
 from dataclasses import dataclass
 
+from .judge_backends import JudgeBackend, LiteLLMBackend
 from .trace import Trace
 
 FAILURE_ANALYSIS_PROMPT = """\
@@ -58,6 +60,17 @@ class Judge:
         result = judge.evaluate(trace)
         assert result.score == 1
         assert result.agreement_rate >= 0.6
+
+    With custom backend::
+
+        from understudy.judge_backends import LiteLLMBackend
+
+        backend = LiteLLMBackend(model="claude-sonnet-4-20250514", temperature=0.7)
+        judge = Judge(rubric="Was the agent helpful?", backend=backend)
+
+    With async evaluation::
+
+        result = await judge.evaluate_async(trace)
     """
 
     def __init__(
@@ -65,10 +78,32 @@ class Judge:
         rubric: str,
         samples: int = 5,
         model: str = "gpt-4o",
+        backend: JudgeBackend | None = None,
+        temperature: float = 1.0,
     ):
+        """Initialize a Judge.
+
+        Args:
+            rubric: The evaluation criterion to judge against.
+            samples: Number of evaluations to run for majority voting.
+            model: Model name (used if backend is not provided).
+            backend: Custom JudgeBackend instance. If not provided,
+                creates a LiteLLMBackend with the specified model.
+            temperature: Temperature for sampling (used if backend is not provided).
+        """
         self.rubric = rubric
         self.samples = samples
         self.model = model
+        self.temperature = temperature
+
+        if backend is not None:
+            self._backend = backend
+        else:
+            self._backend = LiteLLMBackend(
+                model=model,
+                temperature=temperature,
+                max_tokens=10,
+            )
 
     def evaluate(self, trace: Trace) -> JudgeResult:
         """Evaluate a trace against the rubric using majority vote.
@@ -83,6 +118,22 @@ class Judge:
             score = self._single_eval(conversation)
             raw_scores.append(score)
 
+        return self._compute_result(raw_scores)
+
+    async def evaluate_async(self, trace: Trace) -> JudgeResult:
+        """Asynchronously evaluate a trace against the rubric.
+
+        Runs all samples concurrently for faster evaluation.
+        """
+        conversation = trace.conversation_text()
+
+        tasks = [self._single_eval_async(conversation) for _ in range(self.samples)]
+        raw_scores = await asyncio.gather(*tasks)
+
+        return self._compute_result(list(raw_scores))
+
+    def _compute_result(self, raw_scores: list[int]) -> JudgeResult:
+        """Compute the final result from raw scores."""
         yes_count = sum(raw_scores)
         no_count = len(raw_scores) - yes_count
         majority = 1 if yes_count > no_count else 0
@@ -95,30 +146,26 @@ class Judge:
             agreement_rate=agreement,
         )
 
+    def _build_prompt(self, conversation: str) -> str:
+        """Build the evaluation prompt."""
+        prompt = JUDGE_SYSTEM_PROMPT.format(rubric=self.rubric)
+        return f"{prompt}\n\nCONVERSATION TRANSCRIPT:\n{conversation}"
+
     def _single_eval(self, conversation: str) -> int:
         """Run a single judge evaluation. Returns 1 for YES, 0 for NO."""
-        prompt = JUDGE_SYSTEM_PROMPT.format(rubric=self.rubric)
-        full_prompt = f"{prompt}\n\nCONVERSATION TRANSCRIPT:\n{conversation}"
-        return self._eval_litellm(full_prompt)
+        prompt = self._build_prompt(conversation)
+        response = self._backend.evaluate(prompt)
+        return self._parse_response(response)
 
-    def _eval_litellm(self, prompt: str) -> int:
-        """Evaluate using litellm for unified provider access."""
-        try:
-            import litellm
-        except ImportError as e:
-            raise ImportError(
-                "litellm package required for LLM judge. "
-                "Install with: pip install understudy[judges]"
-            ) from e
+    async def _single_eval_async(self, conversation: str) -> int:
+        """Async single evaluation."""
+        prompt = self._build_prompt(conversation)
+        response = await self._backend.evaluate_async(prompt)
+        return self._parse_response(response)
 
-        response = litellm.completion(
-            model=self.model,
-            max_tokens=10,
-            temperature=1.0,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        content = response.choices[0].message.content  # type: ignore[union-attr]
-        text = (content or "").strip().upper()
+    def _parse_response(self, response: str) -> int:
+        """Parse the model response into a score."""
+        text = response.strip().upper()
         return 1 if text.startswith("YES") else 0
 
 

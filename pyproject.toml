@@ -52,6 +52,9 @@ dev = [
 [project.scripts]
 understudy = "understudy.cli:main"
 
+[project.entry-points.pytest11]
+understudy = "understudy.pytest_plugin"
+
 [project.urls]
 Homepage = "https://github.com/gojiplus/understudy"
 Documentation = "https://gojiplus.github.io/understudy"

@@ -1,0 +1,70 @@
+"""Pytest configuration for understudy tests."""
+
+import pytest
+
+from understudy import MockToolkit
+
+# =============================================================================
+# Configure your agent app here
+# =============================================================================
+
+# TODO: Import your agent application
+# from myapp import agent_app
+
+
+@pytest.fixture
+def app():
+    """Return your agent application instance.
+
+    The app must implement the AgentApp protocol:
+    - start(mocks: MockToolkit | None) -> None
+    - send(message: str) -> AgentResponse
+    - stop() -> None
+
+    Example for ADK:
+        from understudy.adk import ADKApp
+        from myagent import root_agent
+        return ADKApp(root_agent)
+
+    Example for LangGraph:
+        from understudy.langgraph import LangGraphApp
+        from myagent import graph
+        return LangGraphApp(graph)
+    """
+    # TODO: Return your agent app
+    raise NotImplementedError("Configure your agent app in conftest.py")
+
+
+@pytest.fixture
+def mocks():
+    """Define mock tools that simulate external services.
+
+    Mocks intercept tool calls during simulation so your agent doesn't
+    hit real APIs. Use scene context data to return realistic responses.
+    """
+    toolkit = MockToolkit()
+
+    @toolkit.handle("lookup_order")
+    def lookup_order(order_id: str, context: dict):
+        orders = context.get("orders", {})
+        if order_id in orders:
+            return orders[order_id]
+        return {"error": f"Order {order_id} not found"}
+
+    @toolkit.handle("get_return_policy")
+    def get_return_policy(context: dict):
+        policy = context.get("policy", {})
+        return {
+            "return_window_days": policy.get("return_window_days", 30),
+            "non_returnable": policy.get("non_returnable_categories", []),
+        }
+
+    @toolkit.handle("create_return")
+    def create_return(order_id: str, reason: str, context: dict):
+        return {
+            "return_id": f"RET-{order_id[-5:]}",
+            "status": "created",
+            "label_url": "https://example.com/label.pdf",
+        }
+
+    return toolkit

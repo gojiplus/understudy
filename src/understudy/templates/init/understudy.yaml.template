@@ -1,0 +1,16 @@
+# understudy configuration
+# This file is optional - most settings can be passed via CLI
+
+# Default simulator model
+simulator_model: gpt-4o
+
+# Default judge model (for LLM-based evaluations)
+judge_model: gpt-4o
+
+# Storage path for run results
+runs_path: .understudy/runs
+
+# Default tags to add to all runs
+# tags:
+#   project: my-agent
+#   env: development

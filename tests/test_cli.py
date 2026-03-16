@@ -737,3 +737,72 @@ class TestEvaluateCommand:
         assert result.exit_code == 0
         assert junit_path.exists()
         assert "JUnit XML exported to:" in result.output
+
+
+class TestInitCommand:
+    def test_init_creates_project_structure(self, runner, tmp_path):
+        project_path = tmp_path / "my-agent-tests"
+        result = runner.invoke(main, ["init", str(project_path)])
+
+        assert result.exit_code == 0
+        assert project_path.exists()
+        assert (project_path / "scenes").is_dir()
+        assert (project_path / "scenes" / "example_scene.yaml").exists()
+        assert (project_path / "conftest.py").exists()
+        assert (project_path / "test_agent.py").exists()
+        assert (project_path / ".understudy.yaml").exists()
+
+    def test_init_with_adk_adapter(self, runner, tmp_path):
+        project_path = tmp_path / "adk-project"
+        result = runner.invoke(main, ["init", str(project_path), "--adapter", "adk"])
+
+        assert result.exit_code == 0
+        conftest = (project_path / "conftest.py").read_text()
+        assert "from understudy.adk import ADKApp" in conftest
+        assert "ADKApp" in conftest
+
+    def test_init_with_langgraph_adapter(self, runner, tmp_path):
+        project_path = tmp_path / "langgraph-project"
+        result = runner.invoke(main, ["init", str(project_path), "--adapter", "langgraph"])
+
+        assert result.exit_code == 0
+        conftest = (project_path / "conftest.py").read_text()
+        assert "from understudy.langgraph import LangGraphApp" in conftest
+        assert "LangGraphApp" in conftest
+
+    def test_init_with_http_adapter(self, runner, tmp_path):
+        project_path = tmp_path / "http-project"
+        result = runner.invoke(main, ["init", str(project_path), "--adapter", "http"])
+
+        assert result.exit_code == 0
+        conftest = (project_path / "conftest.py").read_text()
+        assert "from understudy.http import HTTPApp" in conftest
+        assert "HTTPApp" in conftest
+
+    def test_init_fails_on_nonempty_directory(self, runner, tmp_path):
+        project_path = tmp_path / "existing"
+        project_path.mkdir()
+        (project_path / "some_file.txt").write_text("exists")
+
+        result = runner.invoke(main, ["init", str(project_path)])
+
+        assert result.exit_code != 0
+        assert "not empty" in result.output
+
+    def test_init_in_current_directory(self, runner, tmp_path):
+        result = runner.invoke(main, ["init", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert (tmp_path / "scenes").is_dir()
+        assert (tmp_path / "conftest.py").exists()
+
+    def test_init_example_scene_is_valid(self, runner, tmp_path):
+        project_path = tmp_path / "test-project"
+        runner.invoke(main, ["init", str(project_path)])
+
+        from understudy import Scene
+
+        scene = Scene.from_file(project_path / "scenes" / "example_scene.yaml")
+        assert scene.id == "example_return_request"
+        assert scene.starting_prompt
+        assert scene.conversation_plan

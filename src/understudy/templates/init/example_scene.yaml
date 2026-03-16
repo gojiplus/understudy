@@ -1,0 +1,36 @@
+id: example_return_request
+description: >
+  Customer wants to return an item. Test that the agent follows the return policy
+  and uses the correct tools.
+
+starting_prompt: "Hi, I'd like to return an item I bought recently."
+conversation_plan: |
+  Goal: Return an item from your recent order.
+  - When asked for order details, provide order ID: ORD-12345
+  - The item is a backpack that's too small
+  - Cooperate with the agent's requests for information
+
+persona: cooperative
+max_turns: 15
+
+context:
+  customer:
+    name: Jane Doe
+    email: jane@example.com
+  orders:
+    ORD-12345:
+      items:
+        - name: Hiking Backpack
+          sku: HB-100
+          price: 79.99
+      date: "2025-02-15"
+      status: delivered
+  policy:
+    return_window_days: 30
+
+expectations:
+  required_tools:
+    - lookup_order
+  forbidden_tools:
+    - delete_account
+  expected_resolution: completed

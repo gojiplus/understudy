@@ -10,6 +10,7 @@ import click
 from .compare import compare_runs
 from .reports import ReportGenerator
 from .storage import RunStorage
+from .validation import SceneValidationError
 
 
 def import_object(import_path: str) -> Any:
@@ -768,13 +769,16 @@ def run_command(
         key, value = tag.split("=", 1)
         tags_dict[key] = value
 
-    if scene.is_dir():
-        suite = Suite.from_directory(scene)
-        click.echo(f"Loaded {len(suite.scenes)} scenes from {scene}")
-    else:
-        scene_obj = SceneModel.from_file(scene)
-        suite = Suite([scene_obj])
-        click.echo(f"Loaded scene: {scene_obj.id}")
+    try:
+        if scene.is_dir():
+            suite = Suite.from_directory(scene)
+            click.echo(f"Loaded {len(suite.scenes)} scenes from {scene}")
+        else:
+            scene_obj = SceneModel.from_file(scene)
+            suite = Suite([scene_obj])
+            click.echo(f"Loaded scene: {scene_obj.id}")
+    except SceneValidationError as e:
+        raise click.ClickException(e.message) from e
 
     storage = RunStorage(path=runs)
 
@@ -831,6 +835,387 @@ def run_command(
     else:
         click.echo("\nSome scenes failed.")
         sys.exit(1)
+
+
+@main.command("init")
+@click.argument("path", type=click.Path(path_type=Path), default=".")
+@click.option(
+    "--adapter",
+    type=click.Choice(["generic", "adk", "langgraph", "http"]),
+    default=None,
+    help="Agent adapter type for generated examples",
+)
+def init_command(path: Path, adapter: str | None):
+    """Initialize a new understudy test project.
+
+    Creates a project structure with example scenes, test files, and configuration.
+
+    Examples:
+
+        understudy init                  # Initialize in current directory
+
+        understudy init my-agent-tests   # Create new directory
+
+        understudy init --adapter adk    # With ADK adapter examples
+    """
+    import shutil
+
+    templates_dir = Path(__file__).parent / "templates" / "init"
+
+    if not templates_dir.exists():
+        raise click.ClickException(f"Template directory not found: {templates_dir}")
+
+    path = Path(path)
+    if path != Path("."):
+        if path.exists() and any(path.iterdir()):
+            raise click.ClickException(f"Directory '{path}' already exists and is not empty")
+        path.mkdir(parents=True, exist_ok=True)
+
+    scenes_dir = path / "scenes"
+    scenes_dir.mkdir(exist_ok=True)
+
+    example_scene = templates_dir / "example_scene.yaml"
+    if example_scene.exists():
+        shutil.copy(example_scene, scenes_dir / "example_scene.yaml")
+        click.echo(f"  Created {scenes_dir / 'example_scene.yaml'}")
+
+    conftest_template = templates_dir / "conftest.py.template"
+    if conftest_template.exists():
+        content = conftest_template.read_text()
+        if adapter == "adk":
+            content = _customize_conftest_adk(content)
+        elif adapter == "langgraph":
+            content = _customize_conftest_langgraph(content)
+        elif adapter == "http":
+            content = _customize_conftest_http(content)
+        (path / "conftest.py").write_text(content)
+        click.echo(f"  Created {path / 'conftest.py'}")
+
+    test_template = templates_dir / "test_agent.py.template"
+    if test_template.exists():
+        shutil.copy(test_template, path / "test_agent.py")
+        click.echo(f"  Created {path / 'test_agent.py'}")
+
+    config_template = templates_dir / "understudy.yaml.template"
+    if config_template.exists():
+        shutil.copy(config_template, path / ".understudy.yaml")
+        click.echo(f"  Created {path / '.understudy.yaml'}")
+
+    click.echo(f"\nProject initialized in {path.absolute()}")
+    click.echo("\nNext steps:")
+    click.echo("  1. Configure your agent app in conftest.py")
+    click.echo("  2. Customize the example scene in scenes/example_scene.yaml")
+    click.echo("  3. Run tests: pytest test_agent.py")
+    click.echo("\nOr use the CLI directly:")
+    click.echo("  understudy run --app mymodule:app --scene scenes/")
+
+
+def _get_mocks_section(content: str) -> str:
+    """Extract the mocks fixture section from conftest template."""
+    marker = "@pytest.fixture\ndef mocks():"
+    if marker in content:
+        return marker + content.split(marker)[1]
+    return ""
+
+
+def _customize_conftest_adk(content: str) -> str:
+    """Customize conftest.py for ADK adapter."""
+    mocks_section = _get_mocks_section(content)
+    return f'''"""Pytest configuration for understudy tests."""
+
+import pytest
+
+from understudy import MockToolkit
+from understudy.adk import ADKApp
+
+# TODO: Import your ADK agent
+# from myagent import root_agent
+
+
+@pytest.fixture
+def app():
+    """Return your ADK agent wrapped in ADKApp.
+
+    Example:
+        from myagent import root_agent
+        return ADKApp(root_agent)
+    """
+    # TODO: Return your ADK app
+    # return ADKApp(root_agent)
+    raise NotImplementedError("Configure your ADK agent in conftest.py")
+
+
+{mocks_section}
+'''
+
+
+def _customize_conftest_langgraph(content: str) -> str:
+    """Customize conftest.py for LangGraph adapter."""
+    mocks_section = _get_mocks_section(content)
+    return f'''"""Pytest configuration for understudy tests."""
+
+import pytest
+
+from understudy import MockToolkit
+from understudy.langgraph import LangGraphApp
+
+# TODO: Import your LangGraph graph
+# from myagent import graph
+
+
+@pytest.fixture
+def app():
+    """Return your LangGraph graph wrapped in LangGraphApp.
+
+    Example:
+        from myagent import graph
+        return LangGraphApp(graph)
+    """
+    # TODO: Return your LangGraph app
+    # return LangGraphApp(graph)
+    raise NotImplementedError("Configure your LangGraph graph in conftest.py")
+
+
+{mocks_section}
+'''
+
+
+def _customize_conftest_http(content: str) -> str:
+    """Customize conftest.py for HTTP adapter."""
+    mocks_section = _get_mocks_section(content)
+    return f'''"""Pytest configuration for understudy tests."""
+
+import pytest
+
+from understudy import MockToolkit
+from understudy.http import HTTPApp
+
+# TODO: Configure your HTTP endpoint
+# AGENT_URL = "http://localhost:8000/chat"
+
+
+@pytest.fixture
+def app():
+    """Return your HTTP agent wrapped in HTTPApp.
+
+    Example:
+        return HTTPApp(url="http://localhost:8000/chat")
+    """
+    # TODO: Return your HTTP app
+    # return HTTPApp(url="http://localhost:8000/chat")
+    raise NotImplementedError("Configure your HTTP endpoint in conftest.py")
+
+
+{mocks_section}
+'''
+
+
+@main.command("diff")
+@click.argument("trace1", type=click.Path(exists=True, path_type=Path))
+@click.argument("trace2", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--html",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output HTML diff report to file",
+)
+def diff_command(trace1: Path, trace2: Path, html: Path | None):
+    """Compare two trace files and show differences.
+
+    Useful for detecting regressions when comparing agent versions.
+
+    Examples:
+
+        understudy diff trace_v1.json trace_v2.json
+
+        understudy diff run1/trace.json run2/trace.json --html diff.html
+    """
+    from .diff import diff_traces
+    from .replay import load_trace
+
+    t1 = load_trace(trace1)
+    t2 = load_trace(trace2)
+
+    result = diff_traces(t1, t2)
+
+    if html:
+        content = _generate_diff_html(result, trace1, trace2)
+        html.parent.mkdir(parents=True, exist_ok=True)
+        html.write_text(content)
+        click.echo(f"Diff report generated: {html}")
+    else:
+        click.echo(result.summary())
+
+        if result.regression_warnings:
+            sys.exit(1)
+
+
+@main.command("replay")
+@click.argument("trace", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--app",
+    required=True,
+    help="Python import path to AgentApp (e.g., mymodule:my_app)",
+)
+@click.option(
+    "--mocks",
+    "mocks_path",
+    default=None,
+    help="Python import path to mocks function (returns MockToolkit)",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output path for new trace file",
+)
+@click.option(
+    "--diff",
+    "show_diff",
+    is_flag=True,
+    help="Show diff between original and replay traces",
+)
+def replay_command(
+    trace: Path,
+    app: str,
+    mocks_path: str | None,
+    output: Path | None,
+    show_diff: bool,
+):
+    """Replay a recorded trace against a new agent version.
+
+    This sends the original user messages to the new agent and compares behavior.
+
+    Examples:
+
+        understudy replay trace.json --app mymodule:new_app
+
+        understudy replay trace.json --app mymodule:app --diff
+
+        understudy replay trace.json --app mymodule:app --output new_trace.json
+    """
+    from .diff import diff_traces
+    from .replay import load_trace, replay
+
+    sys.path.insert(0, str(Path.cwd()))
+
+    agent_app = import_object(app)
+
+    mocks = None
+    if mocks_path:
+        mocks_fn = import_object(mocks_path)
+        mocks = mocks_fn()
+
+    original = load_trace(trace)
+
+    click.echo(f"Replaying trace: {original.scene_id}")
+    click.echo(f"Original turns: {original.turn_count}")
+
+    result = replay(original, agent_app, mocks=mocks)
+
+    click.echo("\nReplay Results:")
+    click.echo(f"  Match rate: {result.match_rate:.1%}")
+    click.echo(f"  Matched: {result.matched_responses}/{result.total_turns} turns")
+
+    if result.diverged_at_turn is not None:
+        click.echo(f"  Diverged at turn: {result.diverged_at_turn}")
+
+    if result.errors:
+        click.echo("\nErrors:")
+        for err in result.errors:
+            click.echo(f"  - {err}")
+
+    if show_diff:
+        click.echo("\n" + "=" * 50)
+        diff_result = diff_traces(original, result.new_trace)
+        click.echo(diff_result.summary())
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(result.new_trace.model_dump_json(indent=2))
+        click.echo(f"\nNew trace saved to: {output}")
+
+    if not result.fully_matched:
+        sys.exit(1)
+
+
+def _generate_diff_html(diff, trace1_path: Path, trace2_path: Path) -> str:
+    """Generate an HTML diff report."""
+    warnings_html = ""
+    if diff.regression_warnings:
+        warnings_html = "".join(
+            f'<div class="warning">! {w}</div>' for w in diff.regression_warnings
+        )
+
+    added_html = "<p>None</p>"
+    if diff.added_tools:
+        items = "".join(f"<li class='added'>+ {t}</li>" for t in diff.added_tools)
+        added_html = f"<ul class='tool-list'>{items}</ul>"
+
+    removed_html = "<p>None</p>"
+    if diff.removed_tools:
+        items = "".join(f"<li class='removed'>- {t}</li>" for t in diff.removed_tools)
+        removed_html = f"<ul class='tool-list'>{items}</ul>"
+
+    changed_html = "<p>None</p>"
+    if diff.changed_calls:
+        rows = []
+        for c in diff.changed_calls:
+            changes = ", ".join(f"{k}: {v[0]} -> {v[1]}" for k, v in c.arg_changes.items())
+            rows.append(f"<tr><td>{c.tool_name}</td><td>{changes}</td></tr>")
+        changed_html = f"<table><tr><th>Tool</th><th>Changes</th></tr>{''.join(rows)}</table>"
+
+    terminal_html = ""
+    if diff.terminal_state_changed:
+        terminal_html = (
+            f"<div class='section'><h2>Terminal State</h2>"
+            f"<p>{diff.trace1_terminal} -> {diff.trace2_terminal}</p></div>"
+        )
+
+    added_count = f"+{len(diff.added_tools)}" if diff.added_tools else "0"
+    removed_count = f"-{len(diff.removed_tools)}" if diff.removed_tools else "0"
+    changed_count = f"~{len(diff.changed_calls)}" if diff.changed_calls else "0"
+
+    css = """
+        body { font-family: system-ui, sans-serif; max-width: 1000px; margin: auto; padding: 20px; }
+        h1 { color: #333; }
+        .summary { background: #f5f5f5; padding: 15px; border-radius: 5px; }
+        .added { color: #22863a; background: #dcffe4; padding: 2px 5px; }
+        .removed { color: #cb2431; background: #ffeef0; padding: 2px 5px; }
+        .changed { color: #b08800; background: #fff5b1; padding: 2px 5px; }
+        .warning { background: #fffbdd; border-left: 4px solid #b08800; padding: 10px; }
+        .section { margin: 20px 0; }
+        .tool-list { list-style: none; padding: 0; }
+        .tool-list li { padding: 5px 10px; margin: 2px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
+    """
+
+    changes_line = f"{added_count} added, {removed_count} removed, {changed_count} changed"
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Trace Diff: {diff.trace1_id} vs {diff.trace2_id}</title>
+    <style>{css}</style>
+</head>
+<body>
+    <h1>Trace Diff</h1>
+    <div class="summary">
+        <strong>Before:</strong> {trace1_path.name} ({diff.trace1_id})<br>
+        <strong>After:</strong> {trace2_path.name} ({diff.trace2_id})<br>
+        <strong>Changes:</strong> {changes_line}
+    </div>
+    {warnings_html}
+    <div class="section"><h2>Added Tools</h2>{added_html}</div>
+    <div class="section"><h2>Removed Tools</h2>{removed_html}</div>
+    <div class="section"><h2>Changed Calls</h2>{changed_html}</div>
+    {terminal_html}
+</body>
+</html>
+"""
 
 
 if __name__ == "__main__":

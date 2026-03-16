@@ -5,7 +5,14 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
+
+from .validation import (
+    SceneValidationError,
+    check_common_mistakes,
+    format_pydantic_error,
+    validate_scene_data,
+)
 
 
 class PersonaPreset(StrEnum):
@@ -132,16 +139,48 @@ class Scene(BaseModel):
 
     @classmethod
     def from_file(cls, path: str | Path) -> "Scene":
-        """Load a scene from a YAML or JSON file."""
-        path = Path(path)
-        with open(path) as f:
-            if path.suffix in (".yaml", ".yml"):
-                data = yaml.safe_load(f)
-            else:
-                import json
+        """Load a scene from a YAML or JSON file.
 
-                data = json.load(f)
-        return cls._from_dict(data)
+        Raises:
+            SceneValidationError: If the scene file has validation errors.
+            FileNotFoundError: If the file doesn't exist.
+            yaml.YAMLError: If the YAML/JSON is malformed.
+        """
+        path = Path(path)
+
+        try:
+            with open(path) as f:
+                if path.suffix in (".yaml", ".yml"):
+                    data = yaml.safe_load(f)
+                else:
+                    import json
+
+                    data = json.load(f)
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Scene file not found: {path}") from e
+        except yaml.YAMLError as e:
+            raise SceneValidationError(
+                f"Invalid YAML syntax in '{path}':\n  {e}", file_path=path
+            ) from e
+
+        if data is None:
+            raise SceneValidationError(f"Scene file is empty: {path}", file_path=path)
+
+        warnings = check_common_mistakes(data, file_path=path)
+        if warnings:
+            import sys
+
+            for w in warnings:
+                print(f"Warning: {w}", file=sys.stderr)
+
+        validate_scene_data(data, file_path=path)
+
+        try:
+            return cls._from_dict(data)
+        except ValidationError as e:
+            raise SceneValidationError(
+                format_pydantic_error(e, file_path=path, data=data), file_path=path
+            ) from e
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Scene":

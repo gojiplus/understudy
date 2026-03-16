@@ -1,0 +1,43 @@
+"""Example understudy tests for your agent."""
+
+from pathlib import Path
+
+from understudy import Scene, Suite, check
+
+
+def test_example_scene(app, mocks):
+    """Test the example return request scene.
+
+    This test:
+    1. Loads the scene definition
+    2. Runs a simulated conversation
+    3. Checks that expectations were met
+    """
+    scene = Scene.from_file(Path(__file__).parent / "scenes" / "example_scene.yaml")
+
+    suite = Suite([scene])
+    results = suite.run(app=app, mocks=mocks)
+
+    assert results.all_passed, f"Scene failed: {results.summary()}"
+
+
+def test_required_tools_called(app, mocks):
+    """Verify that required tools are called with correct arguments."""
+    scene = Scene.from_file(Path(__file__).parent / "scenes" / "example_scene.yaml")
+
+    suite = Suite([scene])
+    results = suite.run(app=app, mocks=mocks)
+
+    for result in results.results:
+        trace = result.trace
+        assert trace.called("lookup_order"), "Expected lookup_order to be called"
+
+
+def test_all_scenes_in_directory(app, mocks):
+    """Run all scenes in the scenes/ directory."""
+    scenes_dir = Path(__file__).parent / "scenes"
+
+    suite = Suite.from_directory(scenes_dir)
+    results = suite.run(app=app, mocks=mocks)
+
+    assert results.all_passed, results.summary()

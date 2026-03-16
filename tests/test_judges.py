@@ -4,7 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from understudy import Expectations, ToolCall, Trace, Turn
+from understudy import CallbackBackend, Expectations, ToolCall, Trace, Turn
+from understudy.judge_backends import LiteLLMBackend
 from understudy.judges import (
     FAILURE_ANALYSIS_PROMPT,
     JUDGE_SYSTEM_PROMPT,
@@ -365,3 +366,110 @@ class TestPromptTemplates:
     def test_judge_system_prompt_template(self):
         assert "{rubric}" in JUDGE_SYSTEM_PROMPT
         assert "YES or NO" in JUDGE_SYSTEM_PROMPT
+
+
+class TestJudgeBackends:
+    def _make_trace(self) -> Trace:
+        return Trace(
+            scene_id="test",
+            turns=[
+                Turn(role="user", content="I want help"),
+                Turn(role="agent", content="I'll help you"),
+            ],
+            terminal_state="completed",
+        )
+
+    def test_callback_backend(self):
+        def always_yes(prompt: str) -> str:
+            return "YES"
+
+        backend = CallbackBackend(always_yes)
+        judge = Judge(rubric="Test rubric", samples=3, backend=backend)
+        trace = self._make_trace()
+        result = judge.evaluate(trace)
+
+        assert result.score == 1
+        assert result.raw_scores == [1, 1, 1]
+        assert result.agreement_rate == 1.0
+
+    def test_callback_backend_mixed_responses(self):
+        responses = iter(["YES", "YES", "NO", "YES", "NO"])
+
+        def rotating_response(prompt: str) -> str:
+            return next(responses)
+
+        backend = CallbackBackend(rotating_response)
+        judge = Judge(rubric="Test rubric", samples=5, backend=backend)
+        trace = self._make_trace()
+        result = judge.evaluate(trace)
+
+        assert result.score == 1
+        assert result.raw_scores == [1, 1, 0, 1, 0]
+        assert result.agreement_rate == 0.6
+
+    def test_judge_with_custom_temperature(self):
+        def echo_prompt(prompt: str) -> str:
+            return "YES"
+
+        backend = CallbackBackend(echo_prompt)
+        judge = Judge(rubric="Test", samples=1, backend=backend, temperature=0.5)
+
+        assert judge.temperature == 0.5
+
+    def test_litellm_backend_initialization(self):
+        backend = LiteLLMBackend(model="gpt-4o-mini", temperature=0.7, max_tokens=20)
+        assert backend.model == "gpt-4o-mini"
+        assert backend.temperature == 0.7
+        assert backend.max_tokens == 20
+
+    def test_judge_uses_provided_backend(self):
+        call_count = [0]
+
+        def counting_backend(prompt: str) -> str:
+            call_count[0] += 1
+            return "YES"
+
+        backend = CallbackBackend(counting_backend)
+        judge = Judge(rubric="Test", samples=3, backend=backend)
+        trace = self._make_trace()
+        judge.evaluate(trace)
+
+        assert call_count[0] == 3
+
+
+class TestAsyncJudge:
+    def _make_trace(self) -> Trace:
+        return Trace(
+            scene_id="test",
+            turns=[
+                Turn(role="user", content="Hello"),
+                Turn(role="agent", content="Hi there"),
+            ],
+        )
+
+    @pytest.mark.asyncio
+    async def test_evaluate_async_with_callback_backend(self):
+        async def async_yes(prompt: str) -> str:
+            return "YES"
+
+        backend = CallbackBackend(lambda p: "YES", async_callback=async_yes)
+        judge = Judge(rubric="Test", samples=3, backend=backend)
+        trace = self._make_trace()
+
+        result = await judge.evaluate_async(trace)
+
+        assert result.score == 1
+        assert len(result.raw_scores) == 3
+
+    @pytest.mark.asyncio
+    async def test_evaluate_async_falls_back_to_sync(self):
+        def sync_yes(prompt: str) -> str:
+            return "YES"
+
+        backend = CallbackBackend(sync_yes)
+        judge = Judge(rubric="Test", samples=2, backend=backend)
+        trace = self._make_trace()
+
+        result = await judge.evaluate_async(trace)
+
+        assert result.score == 1
