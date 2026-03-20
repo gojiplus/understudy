@@ -1,10 +1,10 @@
 """Check: validate a trace against scene expectations."""
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .batch import BatchExecutor
 from .metrics import MetricRegistry, MetricResult
 from .models import Expectations
 from .trace import Trace
@@ -214,6 +214,51 @@ class EvaluationResult:
         return self.error is None and self.check_result.passed
 
 
+@dataclass
+class _EvaluationTask:
+    """Internal task descriptor for batch evaluation."""
+
+    trace_id: str
+    trace: Trace
+    expectations: Expectations
+
+
+class _EvaluationExecutor(BatchExecutor[_EvaluationTask, EvaluationResult]):
+    """Executor for running evaluations in parallel."""
+
+    def __init__(
+        self,
+        metrics: list[str] | None,
+        judge_model: str | None,
+        result_storage: Any,
+        parallel: int = 1,
+    ):
+        super().__init__(parallel)
+        self.metrics = metrics
+        self.judge_model = judge_model
+        self.result_storage = result_storage
+
+    def execute_one(self, item: _EvaluationTask) -> EvaluationResult:
+        try:
+            check_result = evaluate(
+                trace=item.trace,
+                expectations=item.expectations,
+                metrics=self.metrics,
+                judge_model=self.judge_model,
+            )
+            if self.result_storage:
+                self.result_storage.save(trace_id=item.trace_id, check_result=check_result)
+            return EvaluationResult(trace_id=item.trace_id, check_result=check_result)
+        except Exception as e:
+            import traceback
+
+            return EvaluationResult(
+                trace_id=item.trace_id,
+                check_result=CheckResult(),
+                error=f"{type(e).__name__}: {e}\n{traceback.format_exc()}",
+            )
+
+
 def evaluate_batch(
     traces: list[Trace] | str | Path,
     expectations: Expectations | None = None,
@@ -237,7 +282,7 @@ def evaluate_batch(
     """
     from .storage import EvaluationStorage, TraceStorage
 
-    trace_list: list[tuple[str, Trace, Expectations]] = []
+    tasks: list[_EvaluationTask] = []
 
     if isinstance(traces, (str, Path)):
         path = Path(traces)
@@ -247,50 +292,22 @@ def evaluate_batch(
             trace = data["trace"]
             scene = data["scene"]
             exp = expectations if expectations else scene.expectations
-            trace_list.append((trace_id, trace, exp))
+            tasks.append(_EvaluationTask(trace_id=trace_id, trace=trace, expectations=exp))
     else:
         for i, trace in enumerate(traces):
             trace_id = f"trace_{i}"
             exp = expectations if expectations else Expectations()
-            trace_list.append((trace_id, trace, exp))
+            tasks.append(_EvaluationTask(trace_id=trace_id, trace=trace, expectations=exp))
 
     result_storage = None
     if output:
         result_storage = EvaluationStorage(path=Path(output))
 
-    results: list[EvaluationResult] = []
+    executor = _EvaluationExecutor(
+        metrics=metrics,
+        judge_model=judge_model,
+        result_storage=result_storage,
+        parallel=parallel,
+    )
 
-    def evaluate_single(trace_id: str, trace: Trace, exp: Expectations) -> EvaluationResult:
-        try:
-            check_result = evaluate(
-                trace=trace,
-                expectations=exp,
-                metrics=metrics,
-                judge_model=judge_model,
-            )
-            if result_storage:
-                result_storage.save(trace_id=trace_id, check_result=check_result)
-            return EvaluationResult(trace_id=trace_id, check_result=check_result)
-        except Exception as e:
-            import traceback
-
-            return EvaluationResult(
-                trace_id=trace_id,
-                check_result=CheckResult(),
-                error=f"{type(e).__name__}: {e}\n{traceback.format_exc()}",
-            )
-
-    if parallel <= 1:
-        for trace_id, trace, exp in trace_list:
-            result = evaluate_single(trace_id, trace, exp)
-            results.append(result)
-    else:
-        with ThreadPoolExecutor(max_workers=parallel) as executor:
-            futures = {
-                executor.submit(evaluate_single, trace_id, trace, exp): trace_id
-                for trace_id, trace, exp in trace_list
-            }
-            for future in as_completed(futures):
-                results.append(future.result())
-
-    return results
+    return executor.run(tasks)

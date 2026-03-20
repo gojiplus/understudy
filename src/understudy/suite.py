@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .batch import BatchExecutor
 from .check import CheckResult, check
 from .models import Scene
 from .runner import AgentApp, run
@@ -103,6 +103,55 @@ class SuiteResults:
         tree.write(path, encoding="unicode", xml_declaration=True)
 
 
+@dataclass
+class _SuiteTask:
+    """Internal task descriptor for suite execution."""
+
+    scene: Scene
+    sim_index: int
+
+
+class _SuiteExecutor(BatchExecutor[_SuiteTask, SceneResult]):
+    """Executor for running suite scenes in parallel."""
+
+    def __init__(
+        self,
+        app: AgentApp,
+        storage: RunStorage | None,
+        tags: dict[str, str] | None,
+        run_kwargs: dict[str, Any],
+        parallel: int = 1,
+    ):
+        super().__init__(parallel)
+        self.app = app
+        self.storage = storage
+        self.tags = tags
+        self.run_kwargs = run_kwargs
+
+    def execute_one(self, item: _SuiteTask) -> SceneResult:
+        scene_id_with_index = (
+            f"{item.scene.id}" if item.sim_index == 0 else f"{item.scene.id}_{item.sim_index}"
+        )
+        try:
+            trace = run(self.app, item.scene, **self.run_kwargs)
+            result = check(trace, item.scene.expectations)
+            scene_result = SceneResult(
+                scene_id=scene_id_with_index,
+                trace=trace,
+                check_result=result,
+            )
+            if self.storage:
+                self.storage.save(trace, item.scene, check_result=result, tags=self.tags)
+            return scene_result
+        except Exception as e:
+            return SceneResult(
+                scene_id=scene_id_with_index,
+                trace=Trace(scene_id=item.scene.id),
+                check_result=CheckResult(),
+                error=str(e),
+            )
+
+
 class Suite:
     """A collection of scenes to run as a test suite."""
 
@@ -144,64 +193,20 @@ class Suite:
         Returns:
             SuiteResults with individual scene outcomes.
         """
+        tasks = [
+            _SuiteTask(scene=scene, sim_index=sim_index)
+            for scene in self.scenes
+            for sim_index in range(n_sims)
+        ]
+
+        executor = _SuiteExecutor(
+            app=app,
+            storage=storage,
+            tags=tags,
+            run_kwargs=run_kwargs,
+            parallel=parallel,
+        )
+
         results = SuiteResults()
-
-        sim_tasks = []
-        for scene in self.scenes:
-            for sim_index in range(n_sims):
-                sim_tasks.append((scene, sim_index))
-
-        if parallel <= 1:
-            for scene, sim_index in sim_tasks:
-                result = self._run_scene(
-                    app, scene, storage=storage, tags=tags, sim_index=sim_index, **run_kwargs
-                )
-                results.results.append(result)
-        else:
-            with ThreadPoolExecutor(max_workers=parallel) as executor:
-                futures = {
-                    executor.submit(
-                        self._run_scene,
-                        app,
-                        scene,
-                        storage=storage,
-                        tags=tags,
-                        sim_index=sim_index,
-                        **run_kwargs,
-                    ): (scene, sim_index)
-                    for scene, sim_index in sim_tasks
-                }
-                for future in as_completed(futures):
-                    results.results.append(future.result())
-
+        results.results = executor.run(tasks)
         return results
-
-    def _run_scene(
-        self,
-        app: AgentApp,
-        scene: Scene,
-        storage: RunStorage | None = None,
-        tags: dict[str, str] | None = None,
-        sim_index: int = 0,
-        **run_kwargs: Any,
-    ) -> SceneResult:
-        """Run a single scene and check expectations."""
-        scene_id_with_index = f"{scene.id}" if sim_index == 0 else f"{scene.id}_{sim_index}"
-        try:
-            trace = run(app, scene, **run_kwargs)
-            result = check(trace, scene.expectations)
-            scene_result = SceneResult(
-                scene_id=scene_id_with_index,
-                trace=trace,
-                check_result=result,
-            )
-            if storage:
-                storage.save(trace, scene, check_result=result, tags=tags)
-            return scene_result
-        except Exception as e:
-            return SceneResult(
-                scene_id=scene_id_with_index,
-                trace=Trace(scene_id=scene.id),
-                check_result=CheckResult(),
-                error=str(e),
-            )

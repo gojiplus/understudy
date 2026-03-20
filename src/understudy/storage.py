@@ -2,6 +2,8 @@
 
 import json
 import secrets
+import shutil
+from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -11,15 +13,217 @@ from .models import Scene
 from .trace import Trace
 
 
-class RunStorage:
+class FileStorage[T](ABC):
+    """Base class for JSON file storage.
+
+    Provides common file I/O operations for storing and retrieving JSON data.
+    Subclasses implement the specifics of how data is structured and serialized.
+    """
+
+    def __init__(self, path: Path | str, use_subdirs: bool = False):
+        """
+        Args:
+            path: Directory to store data.
+            use_subdirs: If True, store each item in its own subdirectory.
+                        If False, store as individual JSON files.
+        """
+        self.path = Path(path)
+        self.use_subdirs = use_subdirs
+
+    @abstractmethod
+    def _generate_key(self, **kwargs: Any) -> str:
+        """Generate a unique key for storing the data."""
+        ...
+
+    @abstractmethod
+    def _serialize(self, key: str, **kwargs: Any) -> dict[str, Any]:
+        """Serialize the data for storage."""
+        ...
+
+    @abstractmethod
+    def _deserialize(self, key: str, stored: dict[str, Any]) -> T:
+        """Deserialize stored data back to its original form."""
+        ...
+
+    def _item_path(self, key: str) -> Path:
+        """Get the path for storing an item."""
+        if self.use_subdirs:
+            return self.path / key
+        return self.path / f"{key}.json"
+
+    def _save_internal(self, **kwargs: Any) -> str:
+        """Internal save implementation used by subclasses."""
+        self.path.mkdir(parents=True, exist_ok=True)
+        key = self._generate_key(**kwargs)
+        serialized = self._serialize(key, **kwargs)
+
+        if self.use_subdirs:
+            item_dir = self._item_path(key)
+            item_dir.mkdir(parents=True, exist_ok=True)
+            for filename, content in serialized.items():
+                (item_dir / filename).write_text(
+                    json.dumps(content, indent=2, default=str)
+                    if not isinstance(content, str)
+                    else content
+                )
+        else:
+            item_file = self._item_path(key)
+            item_file.write_text(json.dumps(serialized, indent=2, default=str))
+
+        return key
+
+    def load(self, key: str) -> T:
+        """Load data by its key.
+
+        Args:
+            key: The identifier.
+
+        Returns:
+            The deserialized data.
+        """
+        item_path = self._item_path(key)
+        if self.use_subdirs:
+            if not item_path.exists():
+                raise FileNotFoundError(f"Item not found: {key}")
+            stored = {}
+            for f in item_path.iterdir():
+                if f.suffix == ".json":
+                    stored[f.name] = json.loads(f.read_text())
+        else:
+            if not item_path.exists():
+                raise FileNotFoundError(f"Item not found: {key}")
+            stored = json.loads(item_path.read_text())
+
+        return self._deserialize(key, stored)
+
+    def list_keys(self) -> list[str]:
+        """List all keys in storage.
+
+        Returns:
+            List of keys, sorted by name (newest first for timestamp-based keys).
+        """
+        if not self.path.exists():
+            return []
+
+        keys = []
+        for item in self.path.iterdir():
+            if self.use_subdirs:
+                if item.is_dir():
+                    keys.append(item.name)
+            else:
+                if item.suffix == ".json" and item.is_file():
+                    keys.append(item.stem)
+
+        return sorted(keys, reverse=True)
+
+    def delete(self, key: str) -> None:
+        """Delete an item by its key.
+
+        Args:
+            key: The identifier.
+        """
+        item_path = self._item_path(key)
+        if item_path.exists():
+            if self.use_subdirs:
+                shutil.rmtree(item_path)
+            else:
+                item_path.unlink()
+
+    def clear(self) -> None:
+        """Delete all items."""
+        if self.path.exists():
+            shutil.rmtree(self.path)
+            self.path.mkdir(parents=True, exist_ok=True)
+
+    def load_all(self) -> list[T]:
+        """Load all items.
+
+        Returns:
+            List of deserialized data.
+        """
+        return [self.load(key) for key in self.list_keys()]
+
+
+class RunStorage(FileStorage[dict[str, Any]]):
     """Persist simulation runs to disk for later analysis and reporting."""
 
     def __init__(self, path: Path | str = ".understudy/runs"):
-        """
-        Args:
-            path: Directory to store run data.
-        """
-        self.path = Path(path)
+        super().__init__(path, use_subdirs=True)
+
+    def _generate_key(self, **kwargs: Any) -> str:
+        trace: Trace = kwargs["trace"]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        suffix = secrets.token_hex(3)
+        return f"{trace.scene_id}_{timestamp}_{suffix}"
+
+    def _serialize(self, key: str, **kwargs: Any) -> dict[str, Any]:
+        trace: Trace = kwargs["trace"]
+        scene: Scene = kwargs["scene"]
+        judges = kwargs.get("judges")
+        check_result = kwargs.get("check_result")
+        tags = kwargs.get("tags")
+
+        files: dict[str, Any] = {}
+
+        files["trace.json"] = json.loads(trace.model_dump_json())
+        files["scene.json"] = json.loads(scene.model_dump_json())
+
+        if judges:
+            judges_data = {}
+            for name, result in judges.items():
+                if hasattr(result, "model_dump"):
+                    judges_data[name] = result.model_dump()
+                elif hasattr(result, "__dict__"):
+                    judges_data[name] = result.__dict__
+                else:
+                    judges_data[name] = result
+            files["judges.json"] = judges_data
+
+        if check_result:
+            check_data = {
+                "passed": check_result.passed,
+                "checks": [
+                    {"label": c.label, "passed": c.passed, "detail": c.detail}
+                    for c in check_result.checks
+                ],
+            }
+            files["check.json"] = check_data
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        metadata = {
+            "run_id": key,
+            "scene_id": trace.scene_id,
+            "timestamp": timestamp,
+            "passed": check_result.passed if check_result else None,
+            "terminal_state": trace.terminal_state,
+            "turn_count": trace.turn_count,
+            "tools_called": trace.call_sequence(),
+            "agents_invoked": trace.agents_invoked(),
+            "tags": tags or {},
+        }
+        files["metadata.json"] = metadata
+
+        return files
+
+    def _deserialize(self, key: str, stored: dict[str, Any]) -> dict[str, Any]:
+        result: dict[str, Any] = {"run_id": key}
+
+        if "trace.json" in stored:
+            result["trace"] = Trace.model_validate(stored["trace.json"])
+
+        if "scene.json" in stored:
+            result["scene"] = Scene.model_validate(stored["scene.json"])
+
+        if "judges.json" in stored:
+            result["judges"] = stored["judges.json"]
+
+        if "check.json" in stored:
+            result["check"] = stored["check.json"]
+
+        if "metadata.json" in stored:
+            result["metadata"] = stored["metadata.json"]
+
+        return result
 
     def save(
         self,
@@ -41,87 +245,13 @@ class RunStorage:
         Returns:
             The run_id (can be used to load the run later).
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        suffix = secrets.token_hex(3)
-        run_id = f"{trace.scene_id}_{timestamp}_{suffix}"
-        run_dir = self.path / run_id
-        run_dir.mkdir(parents=True, exist_ok=True)
-
-        (run_dir / "trace.json").write_text(trace.model_dump_json(indent=2))
-        (run_dir / "scene.json").write_text(scene.model_dump_json(indent=2))
-
-        if judges:
-            judges_data = {}
-            for name, result in judges.items():
-                if hasattr(result, "model_dump"):
-                    judges_data[name] = result.model_dump()
-                elif hasattr(result, "__dict__"):
-                    judges_data[name] = result.__dict__
-                else:
-                    judges_data[name] = result
-            (run_dir / "judges.json").write_text(json.dumps(judges_data, indent=2, default=str))
-
-        if check_result:
-            check_data = {
-                "passed": check_result.passed,
-                "checks": [
-                    {"label": c.label, "passed": c.passed, "detail": c.detail}
-                    for c in check_result.checks
-                ],
-            }
-            (run_dir / "check.json").write_text(json.dumps(check_data, indent=2))
-
-        metadata = {
-            "run_id": run_id,
-            "scene_id": trace.scene_id,
-            "timestamp": timestamp,
-            "passed": check_result.passed if check_result else None,
-            "terminal_state": trace.terminal_state,
-            "turn_count": trace.turn_count,
-            "tools_called": trace.call_sequence(),
-            "agents_invoked": trace.agents_invoked(),
-            "tags": tags or {},
-        }
-        (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
-
-        return run_id
-
-    def load(self, run_id: str) -> dict[str, Any]:
-        """Load a run by its ID.
-
-        Args:
-            run_id: The run identifier.
-
-        Returns:
-            Dict containing trace, scene, judges, check, and metadata.
-        """
-        run_dir = self.path / run_id
-        if not run_dir.exists():
-            raise FileNotFoundError(f"Run not found: {run_id}")
-
-        result: dict[str, Any] = {"run_id": run_id}
-
-        trace_file = run_dir / "trace.json"
-        if trace_file.exists():
-            result["trace"] = Trace.model_validate_json(trace_file.read_text())
-
-        scene_file = run_dir / "scene.json"
-        if scene_file.exists():
-            result["scene"] = Scene.model_validate_json(scene_file.read_text())
-
-        judges_file = run_dir / "judges.json"
-        if judges_file.exists():
-            result["judges"] = json.loads(judges_file.read_text())
-
-        check_file = run_dir / "check.json"
-        if check_file.exists():
-            result["check"] = json.loads(check_file.read_text())
-
-        metadata_file = run_dir / "metadata.json"
-        if metadata_file.exists():
-            result["metadata"] = json.loads(metadata_file.read_text())
-
-        return result
+        return self._save_internal(
+            trace=trace,
+            scene=scene,
+            judges=judges,
+            check_result=check_result,
+            tags=tags,
+        )
 
     def list_runs(self) -> list[str]:
         """List all run IDs in storage.
@@ -138,34 +268,6 @@ class RunStorage:
                 runs.append(run_dir.name)
 
         return sorted(runs, reverse=True)
-
-    def delete(self, run_id: str) -> None:
-        """Delete a run by its ID.
-
-        Args:
-            run_id: The run identifier.
-        """
-        run_dir = self.path / run_id
-        if run_dir.exists():
-            import shutil
-
-            shutil.rmtree(run_dir)
-
-    def clear(self) -> None:
-        """Delete all runs."""
-        if self.path.exists():
-            import shutil
-
-            shutil.rmtree(self.path)
-            self.path.mkdir(parents=True, exist_ok=True)
-
-    def load_all(self) -> list[dict[str, Any]]:
-        """Load all runs.
-
-        Returns:
-            List of run data dicts.
-        """
-        return [self.load(run_id) for run_id in self.list_runs()]
 
     def get_summary(self) -> dict[str, Any]:
         """Get aggregate summary of all runs."""
@@ -288,14 +390,44 @@ class RunStorage:
         return result
 
 
-class TraceStorage:
+class TraceStorage(FileStorage[dict[str, Any]]):
     """Persist simulation traces to disk (without evaluation results).
 
     Used by simulate/simulate_batch for simulation-only workflows.
     """
 
     def __init__(self, path: Path | str = ".understudy/traces"):
-        self.path = Path(path)
+        super().__init__(path, use_subdirs=False)
+
+    def _generate_key(self, **kwargs: Any) -> str:
+        trace: Trace = kwargs["trace"]
+        sim_index = kwargs.get("sim_index", 0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"{trace.scene_id}_{sim_index}_{timestamp}"
+
+    def _serialize(self, key: str, **kwargs: Any) -> dict[str, Any]:
+        trace: Trace = kwargs["trace"]
+        scene: Scene = kwargs["scene"]
+        sim_index = kwargs.get("sim_index", 0)
+        tags = kwargs.get("tags")
+
+        return {
+            "trace": trace.model_dump(mode="json"),
+            "scene": scene.model_dump(mode="json"),
+            "metadata": {
+                "trace_id": key,
+                "scene_id": trace.scene_id,
+                "sim_index": sim_index,
+                "timestamp": datetime.now().isoformat(),
+                "tags": tags or {},
+            },
+        }
+
+    def _deserialize(self, key: str, stored: dict[str, Any]) -> dict[str, Any]:
+        del key
+        stored["trace"] = Trace.model_validate(stored["trace"])
+        stored["scene"] = Scene.model_validate(stored["scene"])
+        return stored
 
     def save(
         self,
@@ -315,44 +447,7 @@ class TraceStorage:
         Returns:
             The trace_id (can be used to load the trace later).
         """
-        self.path.mkdir(parents=True, exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        trace_id = f"{trace.scene_id}_{sim_index}_{timestamp}"
-        trace_file = self.path / f"{trace_id}.json"
-
-        data = {
-            "trace": trace.model_dump(mode="json"),
-            "scene": scene.model_dump(mode="json"),
-            "metadata": {
-                "trace_id": trace_id,
-                "scene_id": trace.scene_id,
-                "sim_index": sim_index,
-                "timestamp": datetime.now().isoformat(),
-                "tags": tags or {},
-            },
-        }
-
-        trace_file.write_text(json.dumps(data, indent=2, default=str))
-        return trace_id
-
-    def load(self, trace_id: str) -> dict[str, Any]:
-        """Load a trace by its ID.
-
-        Args:
-            trace_id: The trace identifier.
-
-        Returns:
-            Dict containing trace, scene, and metadata.
-        """
-        trace_file = self.path / f"{trace_id}.json"
-        if not trace_file.exists():
-            raise FileNotFoundError(f"Trace not found: {trace_id}")
-
-        data = json.loads(trace_file.read_text())
-        data["trace"] = Trace.model_validate(data["trace"])
-        data["scene"] = Scene.model_validate(data["scene"])
-        return data
+        return self._save_internal(trace=trace, scene=scene, sim_index=sim_index, tags=tags)
 
     def load_trace(self, trace_id: str) -> Trace:
         """Load just the trace object by its ID."""
@@ -360,66 +455,29 @@ class TraceStorage:
 
     def list_traces(self) -> list[str]:
         """List all trace IDs in storage."""
-        if not self.path.exists():
-            return []
-
-        traces = []
-        for f in self.path.iterdir():
-            if f.suffix == ".json" and f.is_file():
-                traces.append(f.stem)
-
-        return sorted(traces, reverse=True)
-
-    def load_all(self) -> list[dict[str, Any]]:
-        """Load all traces."""
-        return [self.load(trace_id) for trace_id in self.list_traces()]
-
-    def delete(self, trace_id: str) -> None:
-        """Delete a trace by its ID."""
-        trace_file = self.path / f"{trace_id}.json"
-        if trace_file.exists():
-            trace_file.unlink()
-
-    def clear(self) -> None:
-        """Delete all traces."""
-        if self.path.exists():
-            import shutil
-
-            shutil.rmtree(self.path)
-            self.path.mkdir(parents=True, exist_ok=True)
+        return self.list_keys()
 
 
-class EvaluationStorage:
+class EvaluationStorage(FileStorage[dict[str, Any]]):
     """Persist evaluation results to disk.
 
     Used by evaluate/evaluate_batch for storing evaluation results.
     """
 
     def __init__(self, path: Path | str = ".understudy/results"):
-        self.path = Path(path)
+        super().__init__(path, use_subdirs=False)
 
-    def save(
-        self,
-        trace_id: str,
-        check_result: CheckResult,
-        judges: dict[str, Any] | None = None,
-    ) -> str:
-        """Save evaluation results.
+    def _generate_key(self, **kwargs: Any) -> str:
+        trace_id: str = kwargs["trace_id"]
+        return f"{trace_id}_eval"
 
-        Args:
-            trace_id: The trace that was evaluated.
-            check_result: The evaluation result.
-            judges: Optional judge results.
+    def _serialize(self, key: str, **kwargs: Any) -> dict[str, Any]:
+        del key
+        trace_id: str = kwargs["trace_id"]
+        check_result: CheckResult = kwargs["check_result"]
+        judges = kwargs.get("judges")
 
-        Returns:
-            The result filename.
-        """
-        self.path.mkdir(parents=True, exist_ok=True)
-
-        result_id = f"{trace_id}_eval"
-        result_file = self.path / f"{result_id}.json"
-
-        data = {
+        serialized: dict[str, Any] = {
             "trace_id": trace_id,
             "passed": check_result.passed,
             "checks": [
@@ -446,45 +504,32 @@ class EvaluationStorage:
                     judges_data[name] = result.__dict__
                 else:
                     judges_data[name] = result
-            data["judges"] = judges_data
+            serialized["judges"] = judges_data
 
-        result_file.write_text(json.dumps(data, indent=2, default=str))
-        return result_id
+        return serialized
 
-    def load(self, result_id: str) -> dict[str, Any]:
-        """Load evaluation results by ID."""
-        result_file = self.path / f"{result_id}.json"
-        if not result_file.exists():
-            raise FileNotFoundError(f"Result not found: {result_id}")
+    def _deserialize(self, key: str, stored: dict[str, Any]) -> dict[str, Any]:
+        del key
+        return stored
 
-        return json.loads(result_file.read_text())
+    def save(
+        self,
+        trace_id: str,
+        check_result: CheckResult,
+        judges: dict[str, Any] | None = None,
+    ) -> str:
+        """Save evaluation results.
+
+        Args:
+            trace_id: The trace that was evaluated.
+            check_result: The evaluation result.
+            judges: Optional judge results.
+
+        Returns:
+            The result filename.
+        """
+        return self._save_internal(trace_id=trace_id, check_result=check_result, judges=judges)
 
     def list_results(self) -> list[str]:
         """List all result IDs in storage."""
-        if not self.path.exists():
-            return []
-
-        results = []
-        for f in self.path.iterdir():
-            if f.suffix == ".json" and f.is_file():
-                results.append(f.stem)
-
-        return sorted(results, reverse=True)
-
-    def load_all(self) -> list[dict[str, Any]]:
-        """Load all results."""
-        return [self.load(result_id) for result_id in self.list_results()]
-
-    def delete(self, result_id: str) -> None:
-        """Delete a result by its ID."""
-        result_file = self.path / f"{result_id}.json"
-        if result_file.exists():
-            result_file.unlink()
-
-    def clear(self) -> None:
-        """Delete all results."""
-        if self.path.exists():
-            import shutil
-
-            shutil.rmtree(self.path)
-            self.path.mkdir(parents=True, exist_ok=True)
+        return self.list_keys()

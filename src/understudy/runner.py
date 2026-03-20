@@ -2,11 +2,11 @@
 
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
+from .batch import BatchExecutor
 from .mocks import MockToolkit
 from .models import Scene
 from .trace import StateSnapshot, ToolCall, Trace, Turn, TurnMetrics
@@ -253,6 +253,50 @@ def simulate(
     )
 
 
+class _SimulationTask:
+    """Internal task descriptor for batch simulation."""
+
+    def __init__(self, scene: Scene, sim_index: int):
+        self.scene = scene
+        self.sim_index = sim_index
+
+
+class _SimulationExecutor(BatchExecutor[_SimulationTask, Trace]):
+    """Executor for running simulations in parallel."""
+
+    def __init__(
+        self,
+        app: AgentApp,
+        mocks: MockToolkit | None,
+        simulator_model: str,
+        storage: Any,
+        tags: dict[str, str] | None,
+        parallel: int = 1,
+    ):
+        super().__init__(parallel)
+        self.app = app
+        self.mocks = mocks
+        self.simulator_model = simulator_model
+        self.storage = storage
+        self.tags = tags
+
+    def execute_one(self, item: _SimulationTask) -> Trace:
+        trace = simulate(
+            app=self.app,
+            scene=item.scene,
+            mocks=self.mocks,
+            simulator_model=self.simulator_model,
+        )
+        if self.storage:
+            self.storage.save(
+                trace=trace,
+                scene=item.scene,
+                sim_index=item.sim_index,
+                tags=self.tags,
+            )
+        return trace
+
+
 def simulate_batch(
     app: AgentApp,
     scenes: list[Scene] | str | Path,
@@ -298,40 +342,17 @@ def simulate_batch(
 
         storage = TraceStorage(path=Path(output))
 
-    sim_tasks = []
-    for scene in scene_list:
-        for sim_index in range(n_sims):
-            sim_tasks.append((scene, sim_index))
+    tasks = [
+        _SimulationTask(scene, sim_index) for scene in scene_list for sim_index in range(n_sims)
+    ]
 
-    traces: list[Trace] = []
+    executor = _SimulationExecutor(
+        app=app,
+        mocks=mocks,
+        simulator_model=simulator_model,
+        storage=storage,
+        tags=tags,
+        parallel=parallel,
+    )
 
-    def run_single_sim(scene: Scene, sim_index: int) -> Trace:
-        trace = simulate(
-            app=app,
-            scene=scene,
-            mocks=mocks,
-            simulator_model=simulator_model,
-        )
-        if storage:
-            storage.save(
-                trace=trace,
-                scene=scene,
-                sim_index=sim_index,
-                tags=tags,
-            )
-        return trace
-
-    if parallel <= 1:
-        for scene, sim_index in sim_tasks:
-            trace = run_single_sim(scene, sim_index)
-            traces.append(trace)
-    else:
-        with ThreadPoolExecutor(max_workers=parallel) as executor:
-            futures = {
-                executor.submit(run_single_sim, scene, sim_index): (scene, sim_index)
-                for scene, sim_index in sim_tasks
-            }
-            for future in as_completed(futures):
-                traces.append(future.result())
-
-    return traces
+    return executor.run(tasks)
