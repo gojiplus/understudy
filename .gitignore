@@ -21,8 +21,3 @@ __pycache__/
 
 # Environment variables
 .env
-
-# Generated example files
-examples/sample_report.html
-examples/langgraph_report.html
-examples/test-results/

@@ -20,10 +20,26 @@ Testing with understudy is **4 steps**:
 
 The key insight: **assert against the trace, not the prose**. Don't check what the agent said—check what it did (tool calls).
 
+## Two Evaluation Paradigms
+
+### Conversational Agent Evaluation
+Simulate multi-turn conversations with personas to test dialogue agents.
+- Use case: Customer service bots, assistants, chatbots
+- Assert on tool calls: `trace.called("tool_name")`
+
+### Agentic Flow Evaluation
+Evaluate autonomous agents executing multi-step tasks.
+- Use case: Code agents, research agents, task automation
+- Assert on actions: `trace.performed("action")`
+
+See [examples/README.md](examples/README.md) for complete examples of both paradigms.
+
 **See real examples:**
 - [Example scene](https://github.com/gojiplus/understudy/blob/main/examples/scenes/return_eligible_backpack.yaml) — YAML defining a test scenario
 - [ADK test file](https://github.com/gojiplus/understudy/blob/main/examples/adk/test_adk_returns.py) — pytest assertions against traces
 - [LangGraph test file](https://github.com/gojiplus/understudy/blob/main/examples/langgraph/test_langgraph_returns.py) — same tests, different framework
+- [Agentic test file](https://github.com/gojiplus/understudy/blob/main/examples/agentic/test_agentic.py) — agentic flow evaluation
+- [Agentic scene](https://github.com/gojiplus/understudy/blob/main/examples/agentic_scenes/code_review_task.yaml) — task-based scenario
 - [Example report](https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/examples/langgraph/report/index.html) — HTML report with metrics and transcripts
 
 ## Installation

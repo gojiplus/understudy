@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-04-10
+
+### Added
+
+- **Agentic flow evaluation**: New paradigm for evaluating autonomous task-executing agents
+  - `AgenticScene` for defining task-based evaluation scenarios
+  - `AgenticTrace` for capturing action sequences and outcomes
+  - `run_agentic()` and `check_agentic()` for running and validating agentic flows
+  - New expectation types: `required_actions`, `forbidden_actions`, `outcome`
+- **Agentic examples**: `examples/agentic/` with code review, file search, and data analysis tasks
+- **Agentic scenes**: `examples/agentic_scenes/` with YAML task definitions
+
+### Changed
+
+- Renamed `example/` directory to `examples/` for consistency
+- Renamed test files to unique names (`test_adk_returns.py`, `test_langgraph_returns.py`)
+
 ## [0.4.0] - 2025-03-15
 
 ### Added

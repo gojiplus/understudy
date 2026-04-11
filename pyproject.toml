@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "understudy"
-version = "0.4.0"
+version = "0.5.0"
 description = "Simulation and trace-based evaluation for agentic systems"
 readme = "README.md"
 license = "MIT"
