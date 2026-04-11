@@ -1370,14 +1370,10 @@ def evaluate_agentic_command(
             max_steps=max_steps,
             max_tokens=max_tokens,
             required_actions=(
-                [a.strip() for a in required_actions.split(",")]
-                if required_actions
-                else []
+                [a.strip() for a in required_actions.split(",")] if required_actions else []
             ),
             forbidden_actions=(
-                [a.strip() for a in forbidden_actions.split(",")]
-                if forbidden_actions
-                else []
+                [a.strip() for a in forbidden_actions.split(",")] if forbidden_actions else []
             ),
         )
 
