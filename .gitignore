@@ -23,6 +23,6 @@ __pycache__/
 .env
 
 # Generated example files
-example/sample_report.html
-example/langgraph_report.html
-example/test-results/
+examples/sample_report.html
+examples/langgraph_report.html
+examples/test-results/

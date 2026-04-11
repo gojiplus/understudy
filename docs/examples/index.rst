@@ -5,7 +5,7 @@ Customer Service Agent
 ----------------------
 
 A complete example demonstrating understudy with a customer service agent
-is available in the ``example/`` directory.
+is available in the ``examples/`` directory.
 
 The example includes:
 
@@ -36,14 +36,14 @@ Running the Example
 
    .. code-block:: bash
 
-      cd example
+      cd examples
       python run_simulation.py
 
 4. Run tests:
 
    .. code-block:: bash
 
-      pytest example/test_returns.py -v
+      pytest examples/adk/test_adk_returns.py -v
 
 Scene Files
 ~~~~~~~~~~~

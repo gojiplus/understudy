@@ -37,9 +37,9 @@ See It In Action
 
 Browse real examples from the repo:
 
-- `Example scene <https://github.com/gojiplus/understudy/blob/main/example/scenes/return_eligible_backpack.yaml>`_ — YAML defining what the simulated user wants
-- `ADK test file <https://github.com/gojiplus/understudy/blob/main/example/adk/test_returns.py>`_ — pytest assertions against traces
-- `LangGraph test file <https://github.com/gojiplus/understudy/blob/main/example/langgraph/test_returns.py>`_ — same tests, different framework
+- `Example scene <https://github.com/gojiplus/understudy/blob/main/examples/scenes/return_eligible_backpack.yaml>`_ — YAML defining what the simulated user wants
+- `ADK test file <https://github.com/gojiplus/understudy/blob/main/examples/adk/test_adk_returns.py>`_ — pytest assertions against traces
+- `LangGraph test file <https://github.com/gojiplus/understudy/blob/main/examples/langgraph/test_langgraph_returns.py>`_ — same tests, different framework
 
 **What a simulation run looks like:**
 

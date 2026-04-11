@@ -1,0 +1,41 @@
+id: data_analysis_task
+description: >
+  Data analysis agent task: Analyze a CSV file and produce summary statistics.
+  The agent must read the data, compute statistics, and output results.
+
+task:
+  description: "Analyze the sales data in data/sales.csv and compute summary statistics"
+  goal: "Produce a summary with total sales, average per transaction, and top product"
+  constraints:
+    - "Output must be in JSON format"
+    - "Handle missing values gracefully"
+  initial_state:
+    input_file: "data/sales.csv"
+    output_file: "output/summary.json"
+  max_steps: 15
+
+environment:
+  files:
+    data/sales.csv: |
+      date,product,quantity,price
+      2025-01-01,Widget A,10,25.00
+      2025-01-02,Widget B,5,50.00
+      2025-01-03,Widget A,15,25.00
+      2025-01-04,Widget C,3,100.00
+      2025-01-05,Widget B,8,50.00
+  workspace: "/tmp/data_analysis"
+
+expectations:
+  goal_predicate: "outcome == 'success'"
+  max_steps: 12
+  max_retries: 2
+  required_actions:
+    - read_file
+    - compute_stats
+    - write_output
+  forbidden_actions:
+    - delete_file
+  golden_output:
+    total_sales: 1425.00
+    transaction_count: 5
+    top_product: "Widget A"

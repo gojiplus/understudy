@@ -1,7 +1,7 @@
 """Full evaluation with all LLM judge rubrics.
 
 Run with:
-    cd example/adk
+    cd examples/adk
     pytest test_with_judges.py -v
 
 Requires ANTHROPIC_API_KEY (or other provider key) for judges.

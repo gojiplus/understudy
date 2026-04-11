@@ -2,7 +2,7 @@
 """Standalone demo script for understudy.
 
 Run with:
-    cd example/adk
+    cd examples/adk
     python run_simulation.py
 
 Requires GOOGLE_API_KEY for the agent.

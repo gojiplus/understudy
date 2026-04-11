@@ -1218,5 +1218,185 @@ def _generate_diff_html(diff, trace1_path: Path, trace2_path: Path) -> str:
 """
 
 
+@main.command("run-agentic")
+@click.option(
+    "--app",
+    required=True,
+    help="Python import path to AgenticApp (e.g., mymodule:my_app)",
+)
+@click.option(
+    "--scene",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to agentic scene file (.yaml/.json)",
+)
+@click.option(
+    "--mocks",
+    "mocks_path",
+    default=None,
+    help="Python import path to mocks function (returns MockToolkit)",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output path for trace file",
+)
+def run_agentic_command(
+    app: str,
+    scene: Path,
+    mocks_path: str | None,
+    output: Path | None,
+):
+    """Run an agentic scene against an autonomous agent."""
+    from .agentic import AgenticScene, check_agentic, run_agentic
+
+    sys.path.insert(0, str(Path.cwd()))
+
+    agent_app = import_object(app)
+
+    mocks = None
+    if mocks_path:
+        mocks_fn = import_object(mocks_path)
+        mocks = mocks_fn()
+
+    try:
+        scene_obj = AgenticScene.from_file(scene)
+        click.echo(f"Loaded agentic scene: {scene_obj.id}")
+    except SceneValidationError as e:
+        raise click.ClickException(e.message) from e
+
+    click.echo(f"Task: {scene_obj.task.description}")
+    click.echo(f"Goal: {scene_obj.task.goal}")
+    if mocks:
+        click.echo(f"Using mocks: {mocks.available_tools}")
+
+    trace = run_agentic(agent_app, scene_obj, mocks=mocks)
+
+    click.echo(f"\nOutcome: {trace.outcome}")
+    click.echo(f"Steps: {trace.total_steps}")
+    click.echo(f"Tokens: {trace.total_tokens}")
+
+    result = check_agentic(trace, scene_obj.expectations)
+    click.echo(f"\nChecks: {result}")
+    click.echo(result.summary())
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(trace.model_dump_json(indent=2))
+        click.echo(f"\nTrace saved to: {output}")
+
+    if result.passed:
+        click.echo("\nAll checks passed!")
+        sys.exit(0)
+    else:
+        click.echo("\nSome checks failed.")
+        sys.exit(1)
+
+
+@main.command("evaluate-agentic")
+@click.option(
+    "--trace",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to agentic trace file (.json)",
+)
+@click.option(
+    "--expectations",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Path to expectations file (.yaml/.json)",
+)
+@click.option(
+    "--goal-predicate",
+    default=None,
+    help="Goal predicate expression (e.g., \"outcome == 'success'\")",
+)
+@click.option(
+    "--max-steps",
+    type=int,
+    default=None,
+    help="Maximum allowed steps",
+)
+@click.option(
+    "--max-tokens",
+    type=int,
+    default=None,
+    help="Maximum allowed tokens",
+)
+@click.option(
+    "--required-actions",
+    default=None,
+    help="Required actions (comma-separated)",
+)
+@click.option(
+    "--forbidden-actions",
+    default=None,
+    help="Forbidden actions (comma-separated, supports wildcards)",
+)
+def evaluate_agentic_command(
+    trace: Path,
+    expectations: Path | None,
+    goal_predicate: str | None,
+    max_steps: int | None,
+    max_tokens: int | None,
+    required_actions: str | None,
+    forbidden_actions: str | None,
+):
+    """Evaluate an existing agentic trace."""
+    import json
+
+    import yaml
+
+    from .agentic import AgenticExpectations, AgenticTrace, check_agentic
+    from .agentic.metrics import compute_all_metrics
+
+    trace_obj = AgenticTrace.from_file(trace)
+    click.echo(f"Loaded trace: {trace_obj.scene_id}")
+    click.echo(f"Outcome: {trace_obj.outcome}")
+    click.echo(f"Steps: {trace_obj.total_steps}, Tokens: {trace_obj.total_tokens}")
+
+    if expectations:
+        with open(expectations) as f:
+            if expectations.suffix in (".yaml", ".yml"):
+                exp_data = yaml.safe_load(f)
+            else:
+                exp_data = json.load(f)
+        exp_obj = AgenticExpectations(**exp_data)
+    else:
+        exp_obj = AgenticExpectations(
+            goal_predicate=goal_predicate,
+            max_steps=max_steps,
+            max_tokens=max_tokens,
+            required_actions=(
+                [a.strip() for a in required_actions.split(",")]
+                if required_actions
+                else []
+            ),
+            forbidden_actions=(
+                [a.strip() for a in forbidden_actions.split(",")]
+                if forbidden_actions
+                else []
+            ),
+        )
+
+    result = check_agentic(trace_obj, exp_obj)
+    click.echo(f"\nChecks: {result}")
+    click.echo(result.summary())
+
+    metrics = compute_all_metrics(trace_obj, exp_obj)
+    click.echo("\nMetrics:")
+    for name, metric in metrics.items():
+        click.echo(f"  {name}: {metric.value}")
+
+    if result.passed:
+        click.echo("\nAll checks passed!")
+        sys.exit(0)
+    else:
+        click.echo("\nSome checks failed.")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()

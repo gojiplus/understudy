@@ -21,10 +21,10 @@ Testing with understudy is **4 steps**:
 The key insight: **assert against the trace, not the prose**. Don't check what the agent said—check what it did (tool calls).
 
 **See real examples:**
-- [Example scene](https://github.com/gojiplus/understudy/blob/main/example/scenes/return_eligible_backpack.yaml) — YAML defining a test scenario
-- [ADK test file](https://github.com/gojiplus/understudy/blob/main/example/adk/test_returns.py) — pytest assertions against traces
-- [LangGraph test file](https://github.com/gojiplus/understudy/blob/main/example/langgraph/test_returns.py) — same tests, different framework
-- [Example report](https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/example/langgraph/report/index.html) — HTML report with metrics and transcripts
+- [Example scene](https://github.com/gojiplus/understudy/blob/main/examples/scenes/return_eligible_backpack.yaml) — YAML defining a test scenario
+- [ADK test file](https://github.com/gojiplus/understudy/blob/main/examples/adk/test_adk_returns.py) — pytest assertions against traces
+- [LangGraph test file](https://github.com/gojiplus/understudy/blob/main/examples/langgraph/test_langgraph_returns.py) — same tests, different framework
+- [Example report](https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/examples/langgraph/report/index.html) — HTML report with metrics and transcripts
 
 ## Installation
 

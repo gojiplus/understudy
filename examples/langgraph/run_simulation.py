@@ -6,7 +6,7 @@ Runs all scenes against the LangGraph agent and generates an HTML report.
 Usage:
     pip install understudy[langgraph,reports]
     export OPENAI_API_KEY=your-key
-    cd example/langgraph
+    cd examples/langgraph
     python run_simulation.py
 
 Output:

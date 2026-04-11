@@ -6,8 +6,8 @@ They demonstrate that understudy works with multiple agent frameworks.
 To run:
     pip install understudy[langgraph]
     export OPENAI_API_KEY=your-key
-    cd example/langgraph
-    pytest test_returns.py -v
+    cd examples/langgraph
+    pytest test_langgraph_returns.py -v
 """
 
 import pytest

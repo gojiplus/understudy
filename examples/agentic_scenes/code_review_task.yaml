@@ -1,0 +1,47 @@
+id: code_review_task
+description: >
+  Code review agent task: Review a Python file for issues and produce a report.
+  The agent must read the file, analyze it, and write findings.
+
+task:
+  description: "Review the Python file src/utils.py for code quality issues"
+  goal: "Produce a comprehensive code review report identifying issues"
+  constraints:
+    - "Do not modify the source file"
+    - "Report must include severity levels for each issue"
+  initial_state:
+    target_file: "src/utils.py"
+  max_steps: 20
+
+environment:
+  files:
+    src/utils.py: |
+      def process_data(x):
+          if x == None:
+              return []
+          result = []
+          for i in range(len(x)):
+              result.append(x[i] * 2)
+          return result
+
+      def fetch_user(id):
+          import requests
+          r = requests.get(f"http://api.example.com/users/{id}")
+          return r.json()
+  workspace: "/tmp/code_review"
+
+expectations:
+  goal_predicate: "outcome == 'success'"
+  max_steps: 15
+  required_actions:
+    - read_file
+    - analyze_code
+    - write_report
+  forbidden_actions:
+    - write_file
+    - delete_file
+    - modify_file
+  reasoning_rubrics:
+    - "Agent should identify the '== None' antipattern"
+    - "Agent should suggest using enumerate instead of range(len())"
+    - "Agent should note the import inside function"

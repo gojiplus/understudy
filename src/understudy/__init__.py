@@ -7,6 +7,22 @@ not by reading the script, but by inspecting what actually happened.
 
 from importlib.metadata import version
 
+from . import agentic
+from .agentic import (
+    AgenticApp,
+    AgenticCheckItem,
+    AgenticCheckResult,
+    AgenticExpectations,
+    AgenticMetricResult,
+    AgenticScene,
+    AgenticTrace,
+    Artifact,
+    Step,
+    StepResult,
+    Task,
+    check_agentic,
+    run_agentic,
+)
 from .check import CheckItem, CheckResult, EvaluationResult, check, evaluate, evaluate_batch
 from .compare import ComparisonResult, SceneComparison, compare_runs
 from .diff import ToolCallDiff, TraceDiff, diff_tool_sequences, diff_traces
@@ -115,4 +131,19 @@ __all__ = [
     "TASK_COMPLETION",
     "FACTUAL_GROUNDING",
     "INSTRUCTION_FOLLOWING",
+    # agentic module
+    "agentic",
+    "AgenticApp",
+    "AgenticCheckItem",
+    "AgenticCheckResult",
+    "AgenticExpectations",
+    "AgenticMetricResult",
+    "AgenticScene",
+    "AgenticTrace",
+    "Artifact",
+    "Step",
+    "StepResult",
+    "Task",
+    "check_agentic",
+    "run_agentic",
 ]

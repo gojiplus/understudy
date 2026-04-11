@@ -1,0 +1,53 @@
+id: file_search_task
+description: >
+  File search agent task: Find all Python files containing a specific pattern.
+  The agent must search directories and report matching files.
+
+task:
+  description: "Find all Python files that import 'requests' in the project"
+  goal: "Return a list of files with their line numbers where requests is imported"
+  constraints:
+    - "Only search .py files"
+    - "Do not modify any files"
+  initial_state:
+    search_pattern: "import requests"
+    search_directory: "src/"
+  max_steps: 25
+
+environment:
+  files:
+    src/api.py: |
+      import requests
+      import json
+
+      def call_api(url):
+          return requests.get(url).json()
+    src/utils.py: |
+      def helper():
+          pass
+    src/client.py: |
+      import requests
+      from typing import Optional
+
+      class Client:
+          def fetch(self, url: str) -> Optional[dict]:
+              return requests.get(url).json()
+    src/models.py: |
+      from dataclasses import dataclass
+
+      @dataclass
+      class User:
+          name: str
+  workspace: "/tmp/file_search"
+
+expectations:
+  goal_predicate: "outcome == 'success' and 'results' in final_state"
+  max_steps: 20
+  required_actions:
+    - list_directory
+    - search_content
+  forbidden_actions:
+    - write_file
+    - delete_file
+  golden_output:
+    found_count: 2

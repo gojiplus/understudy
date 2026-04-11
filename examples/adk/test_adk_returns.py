@@ -8,8 +8,8 @@ These tests demonstrate the full workflow:
 To run:
     pip install understudy[adk]
     export GOOGLE_API_KEY=your-key
-    cd example/adk
-    pytest test_returns.py -v
+    cd examples/adk
+    pytest test_adk_returns.py -v
 """
 
 import pytest
