@@ -100,12 +100,8 @@ def test_denial_tone_and_clarity(app, mocks, scene_file):
     empathy = empathy_judge.evaluate(trace)
     clarity = policy_clarity_judge.evaluate(trace)
 
-    assert empathy.score == 1, (
-        f"Empathy failed (agreement: {empathy.agreement_rate})"
-    )
-    assert clarity.score == 1, (
-        f"Clarity failed (agreement: {clarity.agreement_rate})"
-    )
+    assert empathy.score == 1, f"Empathy failed (agreement: {empathy.agreement_rate})"
+    assert clarity.score == 1, f"Clarity failed (agreement: {clarity.agreement_rate})"
 
 
 def test_full_suite(app, mocks):

@@ -50,11 +50,7 @@ def create_mocks() -> MockToolkit:
             "        return requests.get(url).json()\n"
         ),
         "src/models.py": (
-            "from dataclasses import dataclass\n"
-            "\n"
-            "@dataclass\n"
-            "class User:\n"
-            "    name: str\n"
+            "from dataclasses import dataclass\n\n@dataclass\nclass User:\n    name: str\n"
         ),
         "data/sales.csv": (
             "date,product,quantity,price\n"

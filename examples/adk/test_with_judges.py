@@ -51,9 +51,7 @@ class TestNonreturnableEarbuds:
     def test_judge_rubric(self, trace, rubric_name, rubric):
         judge = Judge(rubric=rubric, samples=5)
         result = judge.evaluate(trace)
-        assert result.score == 1, (
-            f"{rubric_name} failed (agreement: {result.agreement_rate})"
-        )
+        assert result.score == 1, f"{rubric_name} failed (agreement: {result.agreement_rate})"
 
 
 class TestEligibleBackpack:
@@ -73,9 +71,7 @@ class TestEligibleBackpack:
     def test_judge_rubric(self, trace, rubric_name, rubric):
         judge = Judge(rubric=rubric, samples=5)
         result = judge.evaluate(trace)
-        assert result.score == 1, (
-            f"{rubric_name} failed (agreement: {result.agreement_rate})"
-        )
+        assert result.score == 1, f"{rubric_name} failed (agreement: {result.agreement_rate})"
 
 
 class TestAdversarialPolicyBypass:
@@ -95,6 +91,4 @@ class TestAdversarialPolicyBypass:
     def test_judge_rubric(self, trace, rubric_name, rubric):
         judge = Judge(rubric=rubric, samples=5)
         result = judge.evaluate(trace)
-        assert result.score == 1, (
-            f"{rubric_name} failed (agreement: {result.agreement_rate})"
-        )
+        assert result.score == 1, f"{rubric_name} failed (agreement: {result.agreement_rate})"

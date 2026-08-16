@@ -136,6 +136,16 @@ class ADKApp(AgentApp):
                 "google-adk package required. Install with: pip install understudy[adk]"
             ) from e
 
+        # _runner and _session are None until the session is opened. Without
+        # this, calling out of order surfaced as
+        # "AttributeError: 'NoneType' object has no attribute 'run_async'",
+        # which names neither the cause nor the fix.
+        if self._runner is None or self._session is None:
+            raise RuntimeError(
+                "ADK session is not open; use this adapter as a context manager "
+                "or call start() before sending a message."
+            )
+
         logger.debug("Sending message: %s", message[:100])
 
         user_content = types.Content(
@@ -189,6 +199,11 @@ class ADKApp(AgentApp):
 
             # capture tool calls using get_function_calls()
             for fc in event.get_function_calls():
+                if not fc.name:
+                    # Unnameable in a report, and ADK only omits the name on
+                    # malformed calls. Dropping beats an anonymous row.
+                    logger.debug("Skipping function call with no name")
+                    continue
                 call = ToolCall(
                     tool_name=fc.name,
                     arguments=dict(fc.args) if fc.args else {},
@@ -206,7 +221,7 @@ class ADKApp(AgentApp):
 
             # capture text responses from content parts
             if hasattr(event, "content") and event.content and hasattr(event.content, "parts"):
-                for part in event.content.parts:
+                for part in event.content.parts or []:
                     text = getattr(part, "text", None)
                     if text:
                         agent_text_parts.append(text)

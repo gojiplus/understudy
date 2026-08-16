@@ -99,7 +99,7 @@ class LiteLLMBackend(BaseJudgeBackend):
             temperature=self.temperature,
             messages=[{"role": "user", "content": prompt}],
         )
-        content = response.choices[0].message.content
+        content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
         return (content or "").strip()
 
     async def evaluate_async(self, prompt: str) -> str:
@@ -111,7 +111,7 @@ class LiteLLMBackend(BaseJudgeBackend):
             temperature=self.temperature,
             messages=[{"role": "user", "content": prompt}],
         )
-        content = response.choices[0].message.content
+        content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
         return (content or "").strip()
 
 

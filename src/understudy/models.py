@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError
@@ -79,6 +79,16 @@ class Persona(BaseModel):
 
     description: str
     behaviors: list[str] = Field(default_factory=list)
+
+    # The presets are attached below the class body, once from_preset exists to
+    # build them. Declared here so they are part of the class rather than names
+    # bolted on afterwards -- ClassVar keeps pydantic from reading them as
+    # fields, which is what lets the assignment work at all.
+    COOPERATIVE: ClassVar["Persona"]
+    FRUSTRATED_BUT_COOPERATIVE: ClassVar["Persona"]
+    ADVERSARIAL: ClassVar["Persona"]
+    VAGUE: ClassVar["Persona"]
+    IMPATIENT: ClassVar["Persona"]
 
     @classmethod
     def from_preset(cls, preset: PersonaPreset | str) -> "Persona":
