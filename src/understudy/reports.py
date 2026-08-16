@@ -236,7 +236,10 @@ class ReportGenerator:
                     tag = query.get("tag", [None])[0]
                     before = query.get("before", [None])[0]
                     after = query.get("after", [None])[0]
-                    if not all([tag, before, after]):
+                    # Written out rather than `all([tag, before, after])`:
+                    # identical behaviour, and it narrows away the `| None` so
+                    # the call below is checkable.
+                    if not tag or not before or not after:
                         self.send_error(400, "Missing required params: tag, before, after")
                         return
                     try:

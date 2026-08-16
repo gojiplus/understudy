@@ -105,7 +105,12 @@ class LangGraphApp(AgentApp):
                                     arguments=tc.get("args", {}),
                                 )
                                 tool_calls.append(call)
-                                tool_call_map[tc["id"]] = call
+                                # id is optional in LangChain's ToolCall; the
+                                # map exists only to pair a call with its later
+                                # result, so an unidentified call simply has no
+                                # entry rather than one keyed on None.
+                                if tc["id"] is not None:
+                                    tool_call_map[tc["id"]] = call
                                 logger.debug("Tool call: %s", tc["name"])
                         if msg.content and isinstance(msg.content, str):
                             final_content = msg.content

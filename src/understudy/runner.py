@@ -87,7 +87,7 @@ class LiteLLMBackend:
             max_tokens=500,
             temperature=0.7,
         )
-        content = response.choices[0].message.content
+        content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
         return content or ""
 
 

@@ -97,7 +97,7 @@ class SessionManager:
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=500,
                 )
-                content = response.choices[0].message.content
+                content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
                 return content if content else ""
 
         return LiteLLMBackend(model)

@@ -93,7 +93,7 @@ def scene(request: pytest.FixtureRequest) -> Scene | None:
 
     path = Path(scene_path)
     if not path.is_absolute():
-        test_dir = Path(request.fspath).parent
+        test_dir = request.path.parent
         path = test_dir / path
 
     if not path.exists():
@@ -149,7 +149,7 @@ def suite_results(request: pytest.FixtureRequest, app, mocks) -> Any:
 
     path = Path(scene_path)
     if not path.is_absolute():
-        test_dir = Path(request.fspath).parent
+        test_dir = request.path.parent
         path = test_dir / path
 
     if path.is_dir():

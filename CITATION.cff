@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "understudy"
+abstract: "Scripted rehearsals for conversational agents: simulate a user, record the transcript, and judge what happened."
+authors:
+  - family-names: "Sood"
+    given-names: "Gaurav"
+repository-code: "https://github.com/gojiplus/understudy"
+license: MIT

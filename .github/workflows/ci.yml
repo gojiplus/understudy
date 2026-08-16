@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --all-groups
       - name: Lint with ruff
         run: uv run ruff check src tests
       - name: Check formatting
@@ -38,6 +38,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --all-groups
       - name: Run tests
         run: uv run pytest tests -v

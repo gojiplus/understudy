@@ -68,9 +68,11 @@ from understudy.mocks import MockToolkit
 
 mocks = MockToolkit()
 
+
 @mocks.handle("lookup_order")
 def lookup_order(order_id: str) -> dict:
     return {"order_id": order_id, "items": [...], "status": "delivered"}
+
 
 @mocks.handle("create_return")
 def create_return(order_id: str, item_sku: str, reason: str) -> dict:
