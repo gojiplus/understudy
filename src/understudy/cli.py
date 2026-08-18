@@ -1394,5 +1394,297 @@ def evaluate_agentic_command(
         sys.exit(1)
 
 
+@main.command("evaluate-agent")
+@click.option(
+    "--app",
+    required=True,
+    help="Python import path to AgentApp (e.g., mymodule:my_app)",
+)
+@click.option(
+    "--code",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Path to agent code directory",
+)
+@click.option(
+    "--docs",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Path to documentation directory",
+)
+@click.option(
+    "--spec",
+    default=None,
+    help="Natural language specification of the agent",
+)
+@click.option(
+    "--scenes",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Path to existing scene files to use",
+)
+@click.option(
+    "--max-iterations",
+    type=int,
+    default=3,
+    help="Maximum evaluation iterations (default: 3)",
+)
+@click.option(
+    "--adversarial/--no-adversarial",
+    default=True,
+    help="Include adversarial testing (default: yes)",
+)
+@click.option(
+    "--min-coverage",
+    type=float,
+    default=0.8,
+    help="Minimum coverage target (default: 0.8)",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output directory for generated scenes",
+)
+@click.option(
+    "--mocks",
+    "mocks_path",
+    default=None,
+    help="Python import path to mocks function (returns MockToolkit)",
+)
+@click.option(
+    "--model",
+    default="claude-sonnet-4-20250514",
+    help="Model for evaluation (default: claude-sonnet-4-20250514)",
+)
+@click.option(
+    "--simulator-model",
+    default="gpt-4o",
+    help="Model for user simulator (default: gpt-4o)",
+)
+@click.option(
+    "--report",
+    "report_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output path for evaluation report (JSON)",
+)
+def evaluate_agent_command(
+    app: str,
+    code: Path | None,
+    docs: Path | None,
+    spec: str | None,
+    scenes: Path | None,
+    max_iterations: int,
+    adversarial: bool,
+    min_coverage: float,
+    output: Path | None,
+    mocks_path: str | None,
+    model: str,
+    simulator_model: str,
+    report_path: Path | None,
+):
+    """Evaluate an agent using LLM-powered test generation and analysis.
+
+    The evaluator agent will:
+    1. Understand the agent from code, docs, and/or spec
+    2. Generate comprehensive test scenarios
+    3. Execute tests and analyze results
+    4. Iterate to expand coverage and investigate failures
+    5. Report findings with root cause analysis
+
+    Examples:
+
+        understudy evaluate-agent --app mymodule:app --spec "Customer service agent"
+
+        understudy evaluate-agent --app mymodule:app --code src/agent/ --docs docs/
+
+        understudy evaluate-agent --app mymodule:app --scenes scenes/ --no-adversarial
+    """
+    import json
+
+    from .evaluator import EvaluatorAgent
+    from .models import Scene as SceneModel
+
+    sys.path.insert(0, str(Path.cwd()))
+
+    agent_app = import_object(app)
+
+    mocks = None
+    if mocks_path:
+        mocks_fn = import_object(mocks_path)
+        mocks = mocks_fn()
+
+    evaluator = EvaluatorAgent(
+        target_app=agent_app,
+        model=model,
+        simulator_model=simulator_model,
+        mocks=mocks,
+    )
+
+    existing_scenes = None
+    if scenes:
+        existing_scenes = []
+        scene_path = Path(scenes)
+        if scene_path.is_dir():
+            for f in sorted(scene_path.iterdir()):
+                if f.suffix in (".yaml", ".yml", ".json"):
+                    try:
+                        existing_scenes.append(SceneModel.from_file(f))
+                    except SceneValidationError as e:
+                        click.echo(f"Warning: Skipping invalid scene {f}: {e.message}")
+        else:
+            try:
+                existing_scenes.append(SceneModel.from_file(scene_path))
+            except SceneValidationError as e:
+                raise click.ClickException(f"Invalid scene file: {e.message}") from e
+
+    if not code and not docs and not spec and not existing_scenes:
+        raise click.ClickException(
+            "At least one of --code, --docs, --spec, or --scenes must be provided"
+        )
+
+    click.echo("Starting agent evaluation...")
+    click.echo(f"  Model: {model}")
+    click.echo(f"  Simulator: {simulator_model}")
+    click.echo(f"  Max iterations: {max_iterations}")
+    click.echo(f"  Adversarial: {adversarial}")
+    click.echo(f"  Min coverage: {min_coverage:.0%}")
+    if mocks:
+        click.echo(f"  Mocks: {mocks.available_tools}")
+    click.echo()
+
+    if existing_scenes and not (code or docs or spec):
+        report = evaluator.evaluate_scenes(
+            scenes=existing_scenes,
+            analyze_failures=True,
+        )
+    else:
+        report = evaluator.evaluate(
+            code=code,
+            docs=docs,
+            spec=spec,
+            existing_scenes=existing_scenes,
+            max_iterations=max_iterations,
+            adversarial=adversarial,
+            min_coverage=min_coverage,
+            output_dir=output,
+        )
+
+    click.echo(report.to_text())
+
+    if report_path:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report.to_dict(), indent=2))
+        click.echo(f"\nReport saved to: {report_path}")
+
+    if output:
+        click.echo(f"Generated scenes saved to: {output}")
+
+    if report.passed:
+        click.echo("\nEvaluation passed!")
+        sys.exit(0)
+    else:
+        click.echo(f"\nEvaluation found {len(report.failures)} issues.")
+        sys.exit(1)
+
+
+@main.command("generate-scenes")
+@click.option(
+    "--code",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Path to agent code directory",
+)
+@click.option(
+    "--docs",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Path to documentation directory",
+)
+@click.option(
+    "--spec",
+    default=None,
+    help="Natural language specification of the agent",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["systematic", "adversarial"]),
+    default="systematic",
+    help="Generation mode (default: systematic)",
+)
+@click.option(
+    "--max-scenes",
+    type=int,
+    default=10,
+    help="Maximum scenes to generate (default: 10)",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Output directory for generated scenes",
+)
+@click.option(
+    "--model",
+    default="claude-sonnet-4-20250514",
+    help="Model for generation (default: claude-sonnet-4-20250514)",
+)
+def generate_scenes_command(
+    code: Path | None,
+    docs: Path | None,
+    spec: str | None,
+    mode: str,
+    max_scenes: int,
+    output: Path,
+    model: str,
+):
+    """Generate test scenes from agent specification.
+
+    Creates reusable test fixtures without running them.
+
+    Examples:
+
+        understudy generate-scenes --spec "Customer service agent" --output scenes/
+
+        understudy generate-scenes --code src/agent/ --mode adversarial --output scenes/
+    """
+    from .evaluator import EvaluatorAgent, GenerationMode
+
+    if not code and not docs and not spec:
+        raise click.ClickException(
+            "At least one of --code, --docs, or --spec must be provided"
+        )
+
+    evaluator = EvaluatorAgent(
+        target_app=None,  # type: ignore
+        model=model,
+    )
+
+    gen_mode = GenerationMode.ADVERSARIAL if mode == "adversarial" else GenerationMode.SYSTEMATIC
+
+    click.echo(f"Generating scenes ({mode} mode)...")
+    click.echo(f"  Model: {model}")
+    click.echo(f"  Max scenes: {max_scenes}")
+    click.echo()
+
+    scenes = evaluator.generate_scenes(
+        code=code,
+        docs=docs,
+        spec=spec,
+        mode=gen_mode,
+        max_scenes=max_scenes,
+        output_dir=output,
+    )
+
+    click.echo(f"Generated {len(scenes)} scenes:")
+    for scene in scenes:
+        click.echo(f"  - {scene.id}: {scene.description[:60]}...")
+
+    click.echo(f"\nScenes saved to: {output}")
+
+
 if __name__ == "__main__":
     main()

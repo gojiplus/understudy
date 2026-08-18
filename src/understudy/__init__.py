@@ -8,6 +8,7 @@ not by reading the script, but by inspecting what actually happened.
 from importlib.metadata import version
 
 from . import agentic
+from . import evaluator
 from .agentic import (
     AgenticApp,
     AgenticCheckItem,
@@ -48,6 +49,24 @@ from .storage import EvaluationStorage, RunStorage, TraceStorage
 from .suite import SceneResult, Suite, SuiteResults
 from .trace import AgentTransfer, StateSnapshot, ToolCall, Trace, TraceMetrics, Turn, TurnMetrics
 from .validation import SceneValidationError
+from .evaluator import (
+    EvaluatorAgent,
+    AgentSpec,
+    Capability,
+    Constraint,
+    InputProcessor,
+    SceneGenerator,
+    GenerationMode,
+    DeepAnalyzer,
+    FailurePattern,
+    CoverageTracker,
+    CoverageReport,
+    IterationController,
+    IterationDecision,
+    EvaluationReport,
+    EvaluationSummary,
+    FailureReport,
+)
 
 __version__ = version("understudy")
 
@@ -146,4 +165,22 @@ __all__ = [
     "Task",
     "check_agentic",
     "run_agentic",
+    # evaluator module
+    "evaluator",
+    "EvaluatorAgent",
+    "AgentSpec",
+    "Capability",
+    "Constraint",
+    "InputProcessor",
+    "SceneGenerator",
+    "GenerationMode",
+    "DeepAnalyzer",
+    "FailurePattern",
+    "CoverageTracker",
+    "CoverageReport",
+    "IterationController",
+    "IterationDecision",
+    "EvaluationReport",
+    "EvaluationSummary",
+    "FailureReport",
 ]
