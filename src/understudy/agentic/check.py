@@ -25,13 +25,16 @@ class AgenticCheckResult:
 
     @property
     def passed(self) -> bool:
+        """True when every individual check passed."""
         return all(c.passed for c in self.checks)
 
     @property
     def failed_checks(self) -> list[AgenticCheckItem]:
+        """Return only the checks that did not pass."""
         return [c for c in self.checks if not c.passed]
 
     def summary(self) -> str:
+        """Render a line-per-check text summary including metrics."""
         lines = []
         for c in self.checks:
             mark = "+" if c.passed else "-"
@@ -41,6 +44,7 @@ class AgenticCheckResult:
         return "\n".join(lines)
 
     def __repr__(self) -> str:
+        """Return a compact pass/fail count summary."""
         n_checks = len(self.checks)
         n_pass = sum(1 for c in self.checks if c.passed)
         return f"AgenticCheckResult({n_pass}/{n_checks} passed)"
@@ -69,7 +73,10 @@ def _evaluate_predicate(predicate: str, trace: AgenticTrace) -> bool:
         "steps": trace.steps,
     }
     try:
-        result = eval(predicate, {"__builtins__": {}}, local_vars)
+        # Predicates are a deliberate expression mini-DSL written by the test
+        # author in their own scene files, evaluated locally with builtins
+        # stripped -- not remote or third-party input.
+        result = eval(predicate, {"__builtins__": {}}, local_vars)  # noqa: S307
         return bool(result)
     except Exception:
         return False
@@ -90,7 +97,9 @@ def _compare_outputs(actual: dict, expected: dict) -> tuple[bool, str]:
     return True, "output matches expected"
 
 
-def check_agentic(trace: AgenticTrace, expectations: AgenticExpectations) -> AgenticCheckResult:
+def check_agentic(
+    trace: AgenticTrace, expectations: AgenticExpectations
+) -> AgenticCheckResult:
     """Validate an agentic trace against expectations.
 
     Args:
@@ -185,7 +194,9 @@ def check_agentic(trace: AgenticTrace, expectations: AgenticExpectations) -> Age
             AgenticCheckItem(
                 label="forbidden_action",
                 passed=passed,
-                detail=f"{pattern} VIOLATED by {violations}" if violations else f"{pattern} OK",
+                detail=f"{pattern} VIOLATED by {violations}"
+                if violations
+                else f"{pattern} OK",
             )
         )
 

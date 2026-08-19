@@ -4,15 +4,12 @@ import logging
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
 from .batch import BatchExecutor
 from .mocks import MockToolkit
 from .models import Scene
 from .trace import StateSnapshot, ToolCall, Trace, Turn, TurnMetrics
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +49,7 @@ class AgentResponse:
         thinking_tokens: int = 0,
         state_snapshot: dict[str, Any] | None = None,
     ):
+        """Capture the agent's reply text, tool calls, and usage stats."""
         self.content = content
         self.tool_calls = tool_calls or []
         self.terminal_state = terminal_state
@@ -76,9 +74,11 @@ class LiteLLMBackend:
     """
 
     def __init__(self, model: str = "gpt-4o"):
+        """Set the litellm model string used for generation."""
         self.model = model
 
     def generate(self, prompt: str) -> str:
+        """Send the prompt to the model and return its text completion."""
         import litellm
 
         response = litellm.completion(
@@ -197,7 +197,9 @@ def run(
             # agent hangs up - agent signaled conversation is over
             if response.terminal_state:
                 trace.terminal_state = response.terminal_state
-                logger.info("Scene %s: agent ended (%s)", scene.id, response.terminal_state)
+                logger.info(
+                    "Scene %s: agent ended (%s)", scene.id, response.terminal_state
+                )
                 break
 
             # generate next user turn - simulator decides if conversation continues
@@ -327,10 +329,11 @@ def simulate_batch(
     if isinstance(scenes, (str, Path)):
         path = Path(scenes)
         if path.is_dir():
-            scene_list = []
-            for f in sorted(path.iterdir()):
-                if f.suffix in (".yaml", ".yml", ".json"):
-                    scene_list.append(SceneModel.from_file(f))
+            scene_list = [
+                SceneModel.from_file(f)
+                for f in sorted(path.iterdir())
+                if f.suffix in (".yaml", ".yml", ".json")
+            ]
         else:
             scene_list = [SceneModel.from_file(path)]
     else:
@@ -343,7 +346,9 @@ def simulate_batch(
         storage = TraceStorage(path=Path(output))
 
     tasks = [
-        _SimulationTask(scene, sim_index) for scene in scene_list for sim_index in range(n_sims)
+        _SimulationTask(scene, sim_index)
+        for scene in scene_list
+        for sim_index in range(n_sims)
     ]
 
     executor = _SimulationExecutor(

@@ -12,7 +12,8 @@ class BatchExecutor[TInput, TOutput](ABC):
     """
 
     def __init__(self, parallel: int = 1):
-        """
+        """Configure the executor.
+
         Args:
             parallel: Number of parallel execution threads.
         """
@@ -42,12 +43,12 @@ class BatchExecutor[TInput, TOutput](ABC):
         results: list[TOutput] = []
 
         if self.parallel <= 1:
-            for item in items:
-                results.append(self.execute_one(item))
+            results.extend(self.execute_one(item) for item in items)
         else:
             with ThreadPoolExecutor(max_workers=self.parallel) as executor:
-                futures = {executor.submit(self.execute_one, item): item for item in items}
-                for future in as_completed(futures):
-                    results.append(future.result())
+                futures = {
+                    executor.submit(self.execute_one, item): item for item in items
+                }
+                results.extend(future.result() for future in as_completed(futures))
 
         return results

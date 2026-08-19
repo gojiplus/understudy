@@ -17,13 +17,15 @@ def import_object(import_path: str) -> Any:
     """Import a Python object from an import path.
 
     Args:
-        import_path: Import path in the format "module:attribute" or "module.submodule:attribute".
+        import_path: Import path in the format "module:attribute" or
+            "module.submodule:attribute".
 
     Returns:
         The imported object.
 
     Raises:
-        click.ClickException: If the import path is invalid or the object cannot be found.
+        click.ClickException: If the import path is invalid or the object
+            cannot be found.
     """
     if ":" not in import_path:
         raise click.ClickException(
@@ -40,14 +42,15 @@ def import_object(import_path: str) -> Any:
     try:
         return getattr(module, attr_name)
     except AttributeError as e:
-        raise click.ClickException(f"Module '{module_path}' has no attribute '{attr_name}'") from e
+        raise click.ClickException(
+            f"Module '{module_path}' has no attribute '{attr_name}'"
+        ) from e
 
 
 @click.group()
 @click.version_option()
 def main():
-    """understudy - Test your AI agents with simulated users."""
-    pass
+    """Understudy - Test your AI agents with simulated users."""
 
 
 @main.command()
@@ -87,7 +90,9 @@ def report(runs: Path, output: Path, analyze_failures: bool, analysis_model: str
     click.echo(f"Found {len(run_ids)} runs")
 
     if analyze_failures:
-        failed = sum(1 for r in run_ids if not storage.load(r).get("metadata", {}).get("passed"))
+        failed = sum(
+            1 for r in run_ids if not storage.load(r).get("metadata", {}).get("passed")
+        )
         if failed:
             click.echo(f"Analyzing {failed} failed runs with {analysis_model}...")
 
@@ -203,7 +208,9 @@ def summary(runs: Path):
 
     if stats["terminal_states"]:
         click.echo("\nTerminal States:")
-        for state, count in sorted(stats["terminal_states"].items(), key=lambda x: -x[1]):
+        for state, count in sorted(
+            stats["terminal_states"].items(), key=lambda x: -x[1]
+        ):
             click.echo(f"  {state}: {count}")
 
     if stats["agents"]:
@@ -259,7 +266,8 @@ def show(run_id: str, runs: Path):
         click.echo("-" * 40)
         for turn in trace.turns:
             role = turn.agent_name or turn.role.upper()
-            click.echo(f"[{role}]: {turn.content[:100]}{'...' if len(turn.content) > 100 else ''}")
+            ellipsis = "..." if len(turn.content) > 100 else ""
+            click.echo(f"[{role}]: {turn.content[:100]}{ellipsis}")
             for call in turn.tool_calls:
                 click.echo(f"  -> {call.tool_name}({call.arguments})")
 
@@ -383,11 +391,17 @@ def compare(
     click.echo(f"Tag: {result.tag}")
     click.echo("=" * 50)
 
-    click.echo(f"\n{'Metric':<20} {result.before_label:>12} {result.after_label:>12} {'Delta':>12}")
+    click.echo(
+        f"\n{'Metric':<20} {result.before_label:>12} "
+        f"{result.after_label:>12} {'Delta':>12}"
+    )
     click.echo("-" * 56)
 
     runs_delta = result.after_runs - result.before_runs
-    click.echo(f"{'Runs':<20} {result.before_runs:>12} {result.after_runs:>12} {runs_delta:>+12}")
+    click.echo(
+        f"{'Runs':<20} {result.before_runs:>12} "
+        f"{result.after_runs:>12} {runs_delta:>+12}"
+    )
 
     b_pr = result.before_pass_rate * 100
     a_pr = result.after_pass_rate * 100
@@ -409,7 +423,9 @@ def compare(
         click.echo(f"  {state:<18} {b:>12} {a:>12} {a - b:>+12}")
 
     click.echo("\nTool Usage:")
-    all_tools = set(result.tool_usage_before.keys()) | set(result.tool_usage_after.keys())
+    all_tools = set(result.tool_usage_before.keys()) | set(
+        result.tool_usage_after.keys()
+    )
     for tool in sorted(all_tools):
         b = result.tool_usage_before.get(tool, 0)
         a = result.tool_usage_after.get(tool, 0)
@@ -417,7 +433,10 @@ def compare(
 
     if result.per_scene:
         click.echo("\nPer-Scene Breakdown:")
-        hdr = f"  {'Scene':<30} {result.before_label:>12} {result.after_label:>12} {'Delta':>12}"
+        hdr = (
+            f"  {'Scene':<30} {result.before_label:>12} "
+            f"{result.after_label:>12} {'Delta':>12}"
+        )
         click.echo(hdr)
         click.echo("  " + "-" * 66)
         for sc in result.per_scene:
@@ -452,13 +471,17 @@ def serve_api(port: int, host: str, simulator_model: str):
     try:
         import uvicorn
     except ImportError:
-        click.echo("Error: uvicorn not installed. Install with: pip install understudy[server]")
+        click.echo(
+            "Error: uvicorn not installed. Install with: pip install understudy[server]"
+        )
         sys.exit(1)
 
     try:
         from .server import get_app
     except ImportError as e:
-        click.echo("Error: FastAPI not installed. Install with: pip install understudy[server]")
+        click.echo(
+            "Error: FastAPI not installed. Install with: pip install understudy[server]"
+        )
         click.echo(f"Details: {e}")
         sys.exit(1)
 
@@ -553,7 +576,9 @@ def simulate_command(
     tags_dict: dict[str, str] = {}
     for tag in tags:
         if "=" not in tag:
-            raise click.ClickException(f"Invalid tag format '{tag}'. Expected 'key=value'")
+            raise click.ClickException(
+                f"Invalid tag format '{tag}'. Expected 'key=value'"
+            )
         key, value = tag.split("=", 1)
         tags_dict[key] = value
 
@@ -569,11 +594,13 @@ def simulate_command(
         parallel=parallel,
         mocks=mocks,
         output=output,
-        tags=tags_dict if tags_dict else None,
+        tags=tags_dict or None,
     )
 
-    scene_count = len(set(t.scene_id for t in traces))
-    click.echo(f"\nSimulated {scene_count} scenes x {n_sims} runs = {len(traces)} traces")
+    scene_count = len({t.scene_id for t in traces})
+    click.echo(
+        f"\nSimulated {scene_count} scenes x {n_sims} runs = {len(traces)} traces"
+    )
     click.echo(f"Traces saved to: {output}")
 
 
@@ -765,7 +792,9 @@ def run_command(
     tags_dict: dict[str, str] = {}
     for tag in tags:
         if "=" not in tag:
-            raise click.ClickException(f"Invalid tag format '{tag}'. Expected 'key=value'")
+            raise click.ClickException(
+                f"Invalid tag format '{tag}'. Expected 'key=value'"
+            )
         key, value = tag.split("=", 1)
         tags_dict[key] = value
 
@@ -792,7 +821,7 @@ def run_command(
         app=agent_app,
         parallel=parallel,
         storage=storage,
-        tags=tags_dict if tags_dict else None,
+        tags=tags_dict or None,
         n_sims=n_sims,
         mocks=mocks,
         simulator_model=simulator_model,
@@ -805,7 +834,9 @@ def run_command(
 
         if rubric == "all":
             rubric_names = [
-                name for name in dir(rubric_module) if name.isupper() and not name.startswith("_")
+                name
+                for name in dir(rubric_module)
+                if name.isupper() and not name.startswith("_")
             ]
         else:
             rubric_names = [r.strip() for r in rubric.split(",")]
@@ -823,7 +854,10 @@ def run_command(
                 result = judge.evaluate(scene_result.trace)
                 judge_results[rubric_name] = result
                 status = "PASS" if result.score == 1 else "FAIL"
-                click.echo(f"  [{status}] {rubric_name} (agreement: {result.agreement_rate:.0%})")
+                click.echo(
+                    f"  [{status}] {rubric_name} "
+                    f"(agreement: {result.agreement_rate:.0%})"
+                )
 
     if junit:
         results.to_junit_xml(junit)
@@ -848,10 +882,17 @@ def run_command(
 def init_command(path: Path, adapter: str | None):
     """Initialize a new understudy test project.
 
-    Creates a project structure with example scenes, test files, and configuration.
+    Creates a project structure with example scenes, test files, and
+    configuration.
+
+    Args:
+        path: Directory to initialize (created if missing).
+        adapter: Agent adapter type for the generated examples.
+
+    Raises:
+        click.ClickException: If the bundled templates cannot be found.
 
     Examples:
-
         understudy init                  # Initialize in current directory
 
         understudy init my-agent-tests   # Create new directory
@@ -866,9 +907,11 @@ def init_command(path: Path, adapter: str | None):
         raise click.ClickException(f"Template directory not found: {templates_dir}")
 
     path = Path(path)
-    if path != Path("."):
+    if path != Path():
         if path.exists() and any(path.iterdir()):
-            raise click.ClickException(f"Directory '{path}' already exists and is not empty")
+            raise click.ClickException(
+                f"Directory '{path}' already exists and is not empty"
+            )
         path.mkdir(parents=True, exist_ok=True)
 
     scenes_dir = path / "scenes"
@@ -1025,8 +1068,12 @@ def diff_command(trace1: Path, trace2: Path, html: Path | None):
 
     Useful for detecting regressions when comparing agent versions.
 
-    Examples:
+    Args:
+        trace1: Path to the baseline trace file.
+        trace2: Path to the trace file to compare against it.
+        html: Optional path to write an HTML diff report to.
 
+    Examples:
         understudy diff trace_v1.json trace_v2.json
 
         understudy diff run1/trace.json run2/trace.json --html diff.html
@@ -1086,10 +1133,18 @@ def replay_command(
 ):
     """Replay a recorded trace against a new agent version.
 
-    This sends the original user messages to the new agent and compares behavior.
+    This sends the original user messages to the new agent and compares
+    behavior.
+
+    Args:
+        trace: Path to the recorded trace file.
+        app: Import path of the agent app, as "module:attribute".
+        mocks_path: Optional import path of a MockToolkit.
+        output: Optional path to write the replayed trace to.
+        show_diff: If True, print a diff between the original and the
+            replayed trace.
 
     Examples:
-
         understudy replay trace.json --app mymodule:new_app
 
         understudy replay trace.json --app mymodule:app --diff
@@ -1163,9 +1218,13 @@ def _generate_diff_html(diff, trace1_path: Path, trace2_path: Path) -> str:
     if diff.changed_calls:
         rows = []
         for c in diff.changed_calls:
-            changes = ", ".join(f"{k}: {v[0]} -> {v[1]}" for k, v in c.arg_changes.items())
+            changes = ", ".join(
+                f"{k}: {v[0]} -> {v[1]}" for k, v in c.arg_changes.items()
+            )
             rows.append(f"<tr><td>{c.tool_name}</td><td>{changes}</td></tr>")
-        changed_html = f"<table><tr><th>Tool</th><th>Changes</th></tr>{''.join(rows)}</table>"
+        changed_html = (
+            f"<table><tr><th>Tool</th><th>Changes</th></tr>{''.join(rows)}</table>"
+        )
 
     terminal_html = ""
     if diff.terminal_state_changed:
@@ -1179,7 +1238,8 @@ def _generate_diff_html(diff, trace1_path: Path, trace2_path: Path) -> str:
     changed_count = f"~{len(diff.changed_calls)}" if diff.changed_calls else "0"
 
     css = """
-        body { font-family: system-ui, sans-serif; max-width: 1000px; margin: auto; padding: 20px; }
+        body { font-family: system-ui, sans-serif; max-width: 1000px;
+               margin: auto; padding: 20px; }
         h1 { color: #333; }
         .summary { background: #f5f5f5; padding: 15px; border-radius: 5px; }
         .added { color: #22863a; background: #dcffe4; padding: 2px 5px; }
@@ -1193,7 +1253,9 @@ def _generate_diff_html(diff, trace1_path: Path, trace2_path: Path) -> str:
         th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
     """
 
-    changes_line = f"{added_count} added, {removed_count} removed, {changed_count} changed"
+    changes_line = (
+        f"{added_count} added, {removed_count} removed, {changed_count} changed"
+    )
 
     return f"""<!DOCTYPE html>
 <html>
@@ -1358,7 +1420,7 @@ def evaluate_agentic_command(
     click.echo(f"Steps: {trace_obj.total_steps}, Tokens: {trace_obj.total_tokens}")
 
     if expectations:
-        with open(expectations) as f:
+        with Path(expectations).open() as f:
             if expectations.suffix in (".yaml", ".yml"):
                 exp_data = yaml.safe_load(f)
             else:
@@ -1370,10 +1432,14 @@ def evaluate_agentic_command(
             max_steps=max_steps,
             max_tokens=max_tokens,
             required_actions=(
-                [a.strip() for a in required_actions.split(",")] if required_actions else []
+                [a.strip() for a in required_actions.split(",")]
+                if required_actions
+                else []
             ),
             forbidden_actions=(
-                [a.strip() for a in forbidden_actions.split(",")] if forbidden_actions else []
+                [a.strip() for a in forbidden_actions.split(",")]
+                if forbidden_actions
+                else []
             ),
         )
 

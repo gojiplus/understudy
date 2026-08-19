@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     from ..models import Expectations
@@ -20,6 +20,7 @@ class MetricResult:
     detail: str = ""
 
     def __repr__(self) -> str:
+        """Return the metric name with its status or value."""
         if self.passed is not None:
             status = "passed" if self.passed else "failed"
             return f"MetricResult({self.name}: {status})"
@@ -38,8 +39,8 @@ class MetricDefinition:
 class MetricRegistry:
     """Central registry for evaluation metrics."""
 
-    _metrics: dict[str, MetricDefinition] = {}
-    _templates_dir: Path = Path(__file__).parent / "templates"
+    _metrics: ClassVar[dict[str, MetricDefinition]] = {}
+    _templates_dir: ClassVar[Path] = Path(__file__).parent / "templates"
 
     @classmethod
     def register(cls, name: str, description: str = ""):
@@ -56,7 +57,9 @@ class MetricRegistry:
         return decorator
 
     @classmethod
-    def compute(cls, name: str, trace: "Trace", expectations: "Expectations") -> MetricResult:
+    def compute(
+        cls, name: str, trace: "Trace", expectations: "Expectations"
+    ) -> MetricResult:
         """Compute a metric by name."""
         if name not in cls._metrics:
             return MetricResult(
@@ -85,6 +88,3 @@ class MetricRegistry:
         if template_path.exists():
             return template_path.read_text()
         return None
-
-
-MetricRegistry._metrics = {}

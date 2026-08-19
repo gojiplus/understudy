@@ -4,7 +4,7 @@ import json
 import secrets
 import shutil
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,11 +21,12 @@ class FileStorage[T](ABC):
     """
 
     def __init__(self, path: Path | str, use_subdirs: bool = False):
-        """
+        """Configure the storage location and layout.
+
         Args:
             path: Directory to store data.
             use_subdirs: If True, store each item in its own subdirectory.
-                        If False, store as individual JSON files.
+                If False, store as individual JSON files.
         """
         self.path = Path(path)
         self.use_subdirs = use_subdirs
@@ -80,6 +81,9 @@ class FileStorage[T](ABC):
 
         Returns:
             The deserialized data.
+
+        Raises:
+            FileNotFoundError: If no item is stored under the key.
         """
         item_path = self._item_path(key)
         if self.use_subdirs:
@@ -148,11 +152,12 @@ class RunStorage(FileStorage[dict[str, Any]]):
     """Persist simulation runs to disk for later analysis and reporting."""
 
     def __init__(self, path: Path | str = ".understudy/runs"):
+        """Store runs under the given directory, one subdirectory per scene."""
         super().__init__(path, use_subdirs=True)
 
     def _generate_key(self, **kwargs: Any) -> str:
         trace: Trace = kwargs["trace"]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         suffix = secrets.token_hex(3)
         return f"{trace.scene_id}_{timestamp}_{suffix}"
 
@@ -189,7 +194,7 @@ class RunStorage(FileStorage[dict[str, Any]]):
             }
             files["check.json"] = check_data
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         metadata = {
             "run_id": key,
             "scene_id": trace.scene_id,
@@ -262,10 +267,11 @@ class RunStorage(FileStorage[dict[str, Any]]):
         if not self.path.exists():
             return []
 
-        runs = []
-        for run_dir in self.path.iterdir():
-            if run_dir.is_dir() and (run_dir / "metadata.json").exists():
-                runs.append(run_dir.name)
+        runs = [
+            run_dir.name
+            for run_dir in self.path.iterdir()
+            if run_dir.is_dir() and (run_dir / "metadata.json").exists()
+        ]
 
         return sorted(runs, reverse=True)
 
@@ -359,7 +365,9 @@ class RunStorage(FileStorage[dict[str, Any]]):
             "turns": turns,
         }
 
-    def _compute_judge_stats(self, runs: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
+    def _compute_judge_stats(
+        self, runs: list[dict[str, Any]]
+    ) -> dict[str, dict[str, float]]:
         """Compute aggregate judge statistics across all runs."""
         rubric_data: dict[str, dict[str, list]] = {}
 
@@ -383,7 +391,9 @@ class RunStorage(FileStorage[dict[str, Any]]):
             agreements = data["agreements"]
             result[name] = {
                 "pass_rate": sum(scores) / len(scores) if scores else 0.0,
-                "avg_agreement": sum(agreements) / len(agreements) if agreements else 0.0,
+                "avg_agreement": sum(agreements) / len(agreements)
+                if agreements
+                else 0.0,
                 "count": len(scores),
             }
 
@@ -397,12 +407,13 @@ class TraceStorage(FileStorage[dict[str, Any]]):
     """
 
     def __init__(self, path: Path | str = ".understudy/traces"):
+        """Store traces as flat files under the given directory."""
         super().__init__(path, use_subdirs=False)
 
     def _generate_key(self, **kwargs: Any) -> str:
         trace: Trace = kwargs["trace"]
         sim_index = kwargs.get("sim_index", 0)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         return f"{trace.scene_id}_{sim_index}_{timestamp}"
 
     def _serialize(self, key: str, **kwargs: Any) -> dict[str, Any]:
@@ -418,7 +429,7 @@ class TraceStorage(FileStorage[dict[str, Any]]):
                 "trace_id": key,
                 "scene_id": trace.scene_id,
                 "sim_index": sim_index,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "tags": tags or {},
             },
         }
@@ -447,7 +458,9 @@ class TraceStorage(FileStorage[dict[str, Any]]):
         Returns:
             The trace_id (can be used to load the trace later).
         """
-        return self._save_internal(trace=trace, scene=scene, sim_index=sim_index, tags=tags)
+        return self._save_internal(
+            trace=trace, scene=scene, sim_index=sim_index, tags=tags
+        )
 
     def load_trace(self, trace_id: str) -> Trace:
         """Load just the trace object by its ID."""
@@ -465,6 +478,7 @@ class EvaluationStorage(FileStorage[dict[str, Any]]):
     """
 
     def __init__(self, path: Path | str = ".understudy/results"):
+        """Store evaluation results as flat files under the given directory."""
         super().__init__(path, use_subdirs=False)
 
     def _generate_key(self, **kwargs: Any) -> str:
@@ -528,7 +542,9 @@ class EvaluationStorage(FileStorage[dict[str, Any]]):
         Returns:
             The result filename.
         """
-        return self._save_internal(trace_id=trace_id, check_result=check_result, judges=judges)
+        return self._save_internal(
+            trace_id=trace_id, check_result=check_result, judges=judges
+        )
 
     def list_results(self) -> list[str]:
         """List all result IDs in storage."""

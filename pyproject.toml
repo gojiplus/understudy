@@ -1,5 +1,5 @@
 [build-system]
-requires = ["uv_build>=0.7"]
+requires = ["uv_build>=0.12.5,<0.13"]
 build-backend = "uv_build"
 
 [project]
@@ -8,6 +8,7 @@ version = "0.5.0"
 description = "Simulation and trace-based evaluation for agentic systems"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [
     { name = "Gaurav Sood" },
@@ -48,22 +49,51 @@ Repository = "https://github.com/gojiplus/understudy"
 Issues = "https://github.com/gojiplus/understudy/issues"
 
 [tool.ruff]
-line-length = 100
+line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+external = ["DOC"]
+select = [
+    "E", "W", "F", "I", "B", "C4", "UP", "N", "D", "S", "SIM", "T20", "PT", "RUF",
+    "PTH", "RET", "PIE", "FURB", "PERF", "DTZ", "LOG", "G", "TC", "FLY",
+    "RSE", "SLOT", "FA", "A", "EXE", "ICN", "PGH", "PLE", "ARG", "SLF",
+]
+# D203/D213: the google convention the fleet standard picks. W191/D206/D300:
+# ruff's own docs list these as always incompatible with `ruff format`, which
+# the standard also runs.
+ignore = ["D203", "D213", "W191", "D206", "D300"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# S108: "/tmp/..." strings in tests are inert fixture data, never opened.
+"tests/**" = ["S101", "D", "ARG", "SLF", "S108"]
+"docs/**" = ["D"]
+# Runnable demo scripts: asserts and prints are their idiom, unused callback
+# arguments mirror the framework signatures they demonstrate, and mock tool
+# handlers must reuse the tool's own argument names (`format` included)
+# because mocks are invoked with keyword arguments from the scene.
+"examples/**" = ["S101", "T20", "D", "ARG", "A002"]
+# Request/response models mirror the UI client's camelCase wire schema.
+"src/understudy/server/models.py" = ["N815"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.pyright]
-# The standard's scope: the shipped package. Unscoped, pyright reported 54
-# errors here and 32 of them were in tests/, where mocks and fixtures are
-# deliberately loose -- which buried the 22 in code users actually run.
 include = ["src"]
 typeCheckingMode = "standard"
+
+[tool.pydoclint]
+style = "google"
+arg-type-hints-in-docstring = false
+check-return-types = false
+check-class-attributes = false
+allow-init-docstring = true
+exclude = '\.venv|tests|docs'
 
 [dependency-groups]
 # Development concerns, not user-facing optional features -- extras are for
@@ -74,6 +104,8 @@ docs = [
     "furo>=2024.0",
     "myst-parser>=3.0",
     "sphinx-autodoc-typehints>=2.0",
+    "sphinx-copybutton",
+    "py-canon @ git+https://github.com/gojiplus/py-canon@v1",
 ]
 test = [
     "pytest>=8.0",
@@ -87,4 +119,6 @@ dev = [
     "ruff>=0.4",
     { include-group = "test" },
     { include-group = "docs" },
+    "pyright>=1.1.390",
+    "pydoclint>=0.5",
 ]

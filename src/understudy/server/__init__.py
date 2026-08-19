@@ -74,7 +74,7 @@ def process_turn(session_id: str, request: TurnRequest) -> TurnResponse:
 
     session.add_agent_turn(
         content=request.displayedContent,
-        tool_calls=request.toolCalls if request.toolCalls else None,
+        tool_calls=request.toolCalls or None,
     )
 
     action = session.simulator.next_action(
@@ -108,7 +108,8 @@ def evaluate_session(session_id: str) -> EvaluateResponse:
     check_result = check(session.trace, session.scene.expectations)
 
     checks = [
-        CheckItem(label=c.label, passed=c.passed, detail=c.detail) for c in check_result.checks
+        CheckItem(label=c.label, passed=c.passed, detail=c.detail)
+        for c in check_result.checks
     ]
 
     passed_count = sum(1 for c in checks if c.passed)

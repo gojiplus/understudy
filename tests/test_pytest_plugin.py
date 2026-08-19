@@ -130,7 +130,9 @@ class TestAssertionHelpers:
             ]
         )
         with pytest.raises(pytest.fail.Exception):
-            AssertionHelpers.assert_tool_sequence(trace, ["lookup_order", "create_return"])
+            AssertionHelpers.assert_tool_sequence(
+                trace, ["lookup_order", "create_return"]
+            )
 
     def test_assert_terminal_state_passes(self):
         trace = self._make_trace()

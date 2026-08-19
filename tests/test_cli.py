@@ -30,7 +30,10 @@ def storage_with_runs(tmp_path):
     for i in range(3):
         trace = Trace(
             scene_id=f"scene_{i}",
-            turns=[Turn(role="user", content="hello"), Turn(role="agent", content="hi")],
+            turns=[
+                Turn(role="user", content="hello"),
+                Turn(role="agent", content="hi"),
+            ],
             terminal_state="done" if i < 2 else "failed",
         )
         scene = Scene(
@@ -88,7 +91,9 @@ class TestShowCommand:
 
     def test_show_existing_run(self, runner, storage_with_runs):
         run_ids = storage_with_runs.list_runs()
-        result = runner.invoke(main, ["show", run_ids[0], "--runs", str(storage_with_runs.path)])
+        result = runner.invoke(
+            main, ["show", run_ids[0], "--runs", str(storage_with_runs.path)]
+        )
         assert result.exit_code == 0
         assert "Run:" in result.output
         assert "Scene:" in result.output
@@ -99,7 +104,9 @@ class TestDeleteCommand:
     def test_delete_not_found(self, runner, tmp_path):
         runs_path = tmp_path / "empty_runs"
         runs_path.mkdir()
-        result = runner.invoke(main, ["delete", "nonexistent", "--runs", str(runs_path)])
+        result = runner.invoke(
+            main, ["delete", "nonexistent", "--runs", str(runs_path)]
+        )
         assert result.exit_code == 1
         assert "Run not found" in result.output
 
@@ -132,13 +139,17 @@ class TestClearCommand:
         assert "No runs found" in result.output
 
     def test_clear_with_confirm(self, runner, storage_with_runs):
-        result = runner.invoke(main, ["clear", "--runs", str(storage_with_runs.path)], input="y\n")
+        result = runner.invoke(
+            main, ["clear", "--runs", str(storage_with_runs.path)], input="y\n"
+        )
         assert result.exit_code == 0
         assert "Cleared 3 runs" in result.output
         assert len(storage_with_runs.list_runs()) == 0
 
     def test_clear_with_yes_flag(self, runner, storage_with_runs):
-        result = runner.invoke(main, ["clear", "--yes", "--runs", str(storage_with_runs.path)])
+        result = runner.invoke(
+            main, ["clear", "--yes", "--runs", str(storage_with_runs.path)]
+        )
         assert result.exit_code == 0
         assert "Cleared 3 runs" in result.output
 
@@ -152,7 +163,10 @@ class TestCompareCommand:
             for i in range(3):
                 trace = Trace(
                     scene_id=f"scene_{i}",
-                    turns=[Turn(role="user", content="hi"), Turn(role="agent", content="hello")],
+                    turns=[
+                        Turn(role="user", content="hi"),
+                        Turn(role="agent", content="hello"),
+                    ],
                     terminal_state="done" if i < passed_count else "failed",
                 )
                 scene = Scene(
@@ -163,7 +177,9 @@ class TestCompareCommand:
                     expectations=Expectations(),
                 )
                 check_result = check(trace, scene.expectations)
-                storage.save(trace, scene, check_result=check_result, tags={"version": version})
+                storage.save(
+                    trace, scene, check_result=check_result, tags={"version": version}
+                )
 
         return storage
 
@@ -408,7 +424,10 @@ def create_mocks():
                     str(runs_path),
                 ],
             )
-            assert "Running with simulator model: claude-sonnet-4-20250514" in result.output
+            assert (
+                "Running with simulator model: claude-sonnet-4-20250514"
+                in result.output
+            )
         finally:
             sys.path.remove(str(mock_app_module))
 
@@ -460,7 +479,9 @@ def create_mocks():
         finally:
             sys.path.remove(str(mock_app_module))
 
-    def test_run_with_mocks(self, runner, scene_file, mock_app_module, mock_mocks_module, tmp_path):
+    def test_run_with_mocks(
+        self, runner, scene_file, mock_app_module, mock_mocks_module, tmp_path
+    ):
         import sys
 
         sys.path.insert(0, str(mock_app_module))
@@ -688,7 +709,10 @@ class TestEvaluateCommand:
         for i in range(2):
             trace = Trace(
                 scene_id=f"scene_{i}",
-                turns=[Turn(role="user", content="hello"), Turn(role="agent", content="hi")],
+                turns=[
+                    Turn(role="user", content="hello"),
+                    Turn(role="agent", content="hi"),
+                ],
                 terminal_state="completed",
             )
             scene = Scene(
@@ -763,7 +787,9 @@ class TestInitCommand:
 
     def test_init_with_langgraph_adapter(self, runner, tmp_path):
         project_path = tmp_path / "langgraph-project"
-        result = runner.invoke(main, ["init", str(project_path), "--adapter", "langgraph"])
+        result = runner.invoke(
+            main, ["init", str(project_path), "--adapter", "langgraph"]
+        )
 
         assert result.exit_code == 0
         conftest = (project_path / "conftest.py").read_text()

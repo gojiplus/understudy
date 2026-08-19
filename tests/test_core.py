@@ -438,7 +438,9 @@ class TestAgentExpectations:
                     agent_name="billing_agent",
                     tool_calls=[
                         ToolCall(
-                            tool_name="process_payment", arguments={}, agent_name="billing_agent"
+                            tool_name="process_payment",
+                            arguments={},
+                            agent_name="billing_agent",
                         )
                     ],
                 ),
@@ -470,7 +472,12 @@ class TestAgentExpectations:
         trace = Trace(
             scene_id="test",
             turns=[
-                Turn(role="agent", content="ok", agent_name="customer_service", tool_calls=[]),
+                Turn(
+                    role="agent",
+                    content="ok",
+                    agent_name="customer_service",
+                    tool_calls=[],
+                ),
             ],
             terminal_state="done",
         )
@@ -482,7 +489,9 @@ class TestAgentExpectations:
         trace = Trace(
             scene_id="test",
             turns=[
-                Turn(role="agent", content="ok", agent_name="admin_agent", tool_calls=[]),
+                Turn(
+                    role="agent", content="ok", agent_name="admin_agent", tool_calls=[]
+                ),
             ],
             terminal_state="done",
         )
@@ -500,14 +509,18 @@ class TestAgentExpectations:
                     agent_name="billing_agent",
                     tool_calls=[
                         ToolCall(
-                            tool_name="process_payment", arguments={}, agent_name="billing_agent"
+                            tool_name="process_payment",
+                            arguments={},
+                            agent_name="billing_agent",
                         ),
                     ],
                 ),
             ],
             terminal_state="done",
         )
-        expectations = Expectations(required_agent_tools={"billing_agent": ["process_payment"]})
+        expectations = Expectations(
+            required_agent_tools={"billing_agent": ["process_payment"]}
+        )
         result = check(trace, expectations)
         assert result.passed
 
@@ -609,7 +622,9 @@ class TestRunStorage:
 class MockAgentApp:
     """A minimal mock implementation of AgentApp for testing."""
 
-    def __init__(self, response_content: str = "Hi there!", terminal_state: str = "done"):
+    def __init__(
+        self, response_content: str = "Hi there!", terminal_state: str = "done"
+    ):
         self.response_content = response_content
         self.terminal_state = terminal_state
 
@@ -617,7 +632,9 @@ class MockAgentApp:
         pass
 
     def send(self, message: str) -> AgentResponse:
-        return AgentResponse(content=self.response_content, terminal_state=self.terminal_state)
+        return AgentResponse(
+            content=self.response_content, terminal_state=self.terminal_state
+        )
 
     def stop(self):
         pass
@@ -644,7 +661,9 @@ class TestSuite:
 
         app = MockAgentApp()
         tags = {"version": "v1", "model": "gpt-4"}
-        suite.run(app, storage=storage, tags=tags, simulator_backend=MockSimulatorBackend())
+        suite.run(
+            app, storage=storage, tags=tags, simulator_backend=MockSimulatorBackend()
+        )
 
         runs = storage.list_runs()
         assert len(runs) == 1
@@ -657,7 +676,8 @@ class TestAgentEndsConversation:
     """Tests for agent-initiated conversation termination."""
 
     def test_agent_terminal_state_ends_conversation(self):
-        """Agent setting terminal_state ends conversation without simulator involvement."""
+        """Agent setting terminal_state ends conversation without simulator
+        involvement."""
         from understudy.runner import run
 
         class AgentThatEnds:
@@ -689,7 +709,8 @@ class TestAgentEndsConversation:
         assert trace.turn_count == 2
 
     def test_agent_terminal_state_priority_over_simulator(self):
-        """Agent terminal_state takes priority - set even if simulator would continue."""
+        """Agent terminal_state takes priority - set even if simulator would
+        continue."""
         from understudy.runner import run
 
         class AgentWithCustomTerminalState:
@@ -750,9 +771,17 @@ class TestMetrics:
 
         metrics = TraceMetrics(
             turns=[
-                TurnMetrics(input_tokens=100, output_tokens=50, thinking_tokens=10, latency_ms=500),
                 TurnMetrics(
-                    input_tokens=200, output_tokens=100, thinking_tokens=20, latency_ms=600
+                    input_tokens=100,
+                    output_tokens=50,
+                    thinking_tokens=10,
+                    latency_ms=500,
+                ),
+                TurnMetrics(
+                    input_tokens=200,
+                    output_tokens=100,
+                    thinking_tokens=20,
+                    latency_ms=600,
                 ),
             ]
         )
@@ -848,7 +877,11 @@ class TestMetrics:
         assert result.name == "tool_trajectory"
         assert result.value["total_calls"] == 3
         assert "lookup_order" in result.value["unique_tools"]
-        assert result.value["sequence"] == ["lookup_order", "get_return_policy", "lookup_order"]
+        assert result.value["sequence"] == [
+            "lookup_order",
+            "get_return_policy",
+            "lookup_order",
+        ]
 
     def test_check_with_metrics(self):
         trace = Trace(
@@ -894,7 +927,9 @@ class TestStateSnapshots:
             turns=[Turn(role="agent", content="ok")],
             state_snapshots=[
                 StateSnapshot(turn_number=1, state={"order_id": "ORD-123"}),
-                StateSnapshot(turn_number=2, state={"order_id": "ORD-123", "status": "approved"}),
+                StateSnapshot(
+                    turn_number=2, state={"order_id": "ORD-123", "status": "approved"}
+                ),
             ],
         )
         assert len(trace.state_snapshots) == 2
@@ -972,7 +1007,9 @@ class TestEvaluationStorage:
 
         check_result = CheckResult(
             checks=[
-                CheckItem(label="required_tool", passed=True, detail="lookup_order called"),
+                CheckItem(
+                    label="required_tool", passed=True, detail="lookup_order called"
+                ),
             ]
         )
 
@@ -1206,7 +1243,9 @@ class TestSimulateBatch:
 
         output_path = tmp_path / "traces"
         app = MockAgentApp()
-        simulate_batch(app, [scene], n_sims=1, output=output_path, tags={"version": "v1"})
+        simulate_batch(
+            app, [scene], n_sims=1, output=output_path, tags={"version": "v1"}
+        )
 
         storage = TraceStorage(path=output_path)
         trace_id = storage.list_traces()[0]
@@ -1341,13 +1380,17 @@ class TestEvaluateBatchComprehensive:
                 turns=[Turn(role="agent", content="done")],
                 terminal_state="completed",
                 metrics=TraceMetrics(
-                    turns=[TurnMetrics(input_tokens=100, output_tokens=50, latency_ms=500)]
+                    turns=[
+                        TurnMetrics(input_tokens=100, output_tokens=50, latency_ms=500)
+                    ]
                 ),
             )
         ]
         expectations = Expectations()
 
-        results = evaluate_batch(traces, expectations=expectations, metrics=["efficiency"])
+        results = evaluate_batch(
+            traces, expectations=expectations, metrics=["efficiency"]
+        )
 
         assert len(results) == 1
         assert "efficiency" in results[0].check_result.metrics
@@ -1356,10 +1399,10 @@ class TestEvaluateBatchComprehensive:
         class BadTrace:
             scene_id = "bad"
 
-        traces = [BadTrace()]  # type: ignore
+        traces = [BadTrace()]
         expectations = Expectations()
 
-        results = evaluate_batch(traces, expectations=expectations)  # type: ignore
+        results = evaluate_batch(traces, expectations=expectations)  # type: ignore[arg-type]
 
         assert len(results) == 1
         assert results[0].error is not None

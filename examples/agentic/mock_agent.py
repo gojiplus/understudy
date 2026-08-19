@@ -80,7 +80,6 @@ class MockAgenticApp:
 
     def stop(self) -> None:
         """Clean up."""
-        pass
 
 
 def create_code_review_behavior() -> list[dict[str, Any]]:
@@ -175,7 +174,8 @@ def create_file_search_behavior() -> list[dict[str, Any]]:
         },
         {
             "step_type": "think",
-            "reasoning": "Found matches in src/api.py (line 1) and src/client.py (line 1)",
+            "reasoning": "Found matches in src/api.py (line 1) and "
+            "src/client.py (line 1)",
             "tokens_used": 80,
         },
         {
@@ -226,7 +226,8 @@ def create_data_analysis_behavior() -> list[dict[str, Any]]:
         },
         {
             "step_type": "think",
-            "reasoning": "Calculated: Total=1425.00, Count=5, Top product=Widget A (25 units)",
+            "reasoning": "Calculated: Total=1425.00, Count=5, "
+            "Top product=Widget A (25 units)",
             "tokens_used": 80,
         },
         {

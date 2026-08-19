@@ -16,7 +16,8 @@ class ReportGenerator:
         analyze_failures: bool = False,
         analysis_model: str = "gpt-4o",
     ):
-        """
+        """Configure the report generator.
+
         Args:
             storage: RunStorage instance containing saved runs.
             static_mode: If True, generate relative links for static HTML files.
@@ -36,7 +37,8 @@ class ReportGenerator:
                 from jinja2 import Environment, PackageLoader
             except ImportError as e:
                 raise ImportError(
-                    "jinja2 package required. Install with: pip install understudy[reports]"
+                    "jinja2 package required. "
+                    "Install with: pip install understudy[reports]"
                 ) from e
 
             self._env = Environment(
@@ -150,7 +152,8 @@ class ReportGenerator:
         )
 
         all_states = sorted(
-            set(result.terminal_states_before.keys()) | set(result.terminal_states_after.keys())
+            set(result.terminal_states_before.keys())
+            | set(result.terminal_states_after.keys())
         )
         all_tools = sorted(
             set(result.tool_usage_before.keys()) | set(result.tool_usage_after.keys())
@@ -214,6 +217,9 @@ class ReportGenerator:
         Args:
             port: Port to serve on.
             host: Host to bind to.
+
+        Raises:
+            ImportError: If the stdlib http.server module is unavailable.
         """
         try:
             from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -240,7 +246,9 @@ class ReportGenerator:
                     # identical behaviour, and it narrows away the `| None` so
                     # the call below is checkable.
                     if not tag or not before or not after:
-                        self.send_error(400, "Missing required params: tag, before, after")
+                        self.send_error(
+                            400, "Missing required params: tag, before, after"
+                        )
                         return
                     try:
                         content = generator.generate_comparison_report(
@@ -269,16 +277,19 @@ class ReportGenerator:
                 self.end_headers()
                 self.wfile.write(content.encode("utf-8"))
 
-            def log_message(self, format: str, *args: Any) -> None:
+            def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+                # Parameter name is fixed by the BaseHTTPRequestHandler
+                # signature this overrides.
                 pass
 
         server = HTTPServer((host, port), ReportHandler)
-        print(f"Serving reports at http://{host}:{port}")
-        print("Press Ctrl+C to stop")
+        # Console output is the interface of this blocking serve loop.
+        print(f"Serving reports at http://{host}:{port}")  # noqa: T201
+        print("Press Ctrl+C to stop")  # noqa: T201
 
         try:
             server.serve_forever()
         except KeyboardInterrupt:
-            print("\nShutting down...")
+            print("\nShutting down...")  # noqa: T201
         finally:
             server.shutdown()

@@ -41,7 +41,10 @@ class TestReplay:
             turns.append(Turn(role="user", content=msg))
             calls = []
             if tool_calls and i < len(tool_calls):
-                calls = [ToolCall(tool_name=name, arguments=args) for name, args in tool_calls[i]]
+                calls = [
+                    ToolCall(tool_name=name, arguments=args)
+                    for name, args in tool_calls[i]
+                ]
             turns.append(Turn(role="agent", content=f"Response {i}", tool_calls=calls))
 
         return Trace(scene_id="test", turns=turns, terminal_state="completed")
@@ -54,7 +57,9 @@ class TestReplay:
 
         app = MockAgentApp(
             [
-                AgentResponse(content="Hi", tool_calls=[ToolCall(tool_name="greet", arguments={})]),
+                AgentResponse(
+                    content="Hi", tool_calls=[ToolCall(tool_name="greet", arguments={})]
+                ),
                 AgentResponse(
                     content="I'm good",
                     tool_calls=[ToolCall(tool_name="check_status", arguments={})],
@@ -77,7 +82,9 @@ class TestReplay:
 
         app = MockAgentApp(
             [
-                AgentResponse(content="Hi", tool_calls=[ToolCall(tool_name="greet", arguments={})]),
+                AgentResponse(
+                    content="Hi", tool_calls=[ToolCall(tool_name="greet", arguments={})]
+                ),
                 AgentResponse(
                     content="Error",
                     tool_calls=[ToolCall(tool_name="cancel_order", arguments={})],
@@ -92,7 +99,9 @@ class TestReplay:
         assert not result.fully_matched
 
     def test_replay_sends_correct_messages(self):
-        original = self._make_trace(user_messages=["Message 1", "Message 2", "Message 3"])
+        original = self._make_trace(
+            user_messages=["Message 1", "Message 2", "Message 3"]
+        )
 
         app = MockAgentApp(
             [

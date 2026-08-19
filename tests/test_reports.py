@@ -13,7 +13,10 @@ def storage_with_runs(tmp_path):
     for i in range(3):
         trace = Trace(
             scene_id=f"scene_{i}",
-            turns=[Turn(role="user", content="hello"), Turn(role="agent", content="hi")],
+            turns=[
+                Turn(role="user", content="hello"),
+                Turn(role="agent", content="hi"),
+            ],
             terminal_state="done" if i < 2 else "failed",
         )
         scene = Scene(
@@ -78,7 +81,10 @@ class TestComparisonReport:
             for i in range(2):
                 trace = Trace(
                     scene_id=f"scene_{i}",
-                    turns=[Turn(role="user", content="hi"), Turn(role="agent", content="hello")],
+                    turns=[
+                        Turn(role="user", content="hi"),
+                        Turn(role="agent", content="hello"),
+                    ],
                     terminal_state="done" if version == "v2" else "failed",
                 )
                 scene = Scene(
@@ -89,7 +95,9 @@ class TestComparisonReport:
                     expectations=Expectations(),
                 )
                 check_result = check(trace, scene.expectations)
-                storage.save(trace, scene, check_result=check_result, tags={"version": version})
+                storage.save(
+                    trace, scene, check_result=check_result, tags={"version": version}
+                )
 
         return storage
 
@@ -118,7 +126,7 @@ class TestComparisonReport:
 
     def test_generate_comparison_report_missing_tag(self, storage_with_tagged_runs):
         generator = ReportGenerator(storage_with_tagged_runs)
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ValueError, match="No runs found") as exc_info:
             generator.generate_comparison_report(
                 tag="version",
                 before_value="v0",

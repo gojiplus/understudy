@@ -58,7 +58,9 @@ class TestCompareRuns:
             check_result = check(trace, scene.expectations)
             storage.save(trace, scene, check_result=check_result, tags={"prompt": "v2"})
 
-        result = compare_runs(storage, tag="prompt", before_value="v1", after_value="v2")
+        result = compare_runs(
+            storage, tag="prompt", before_value="v1", after_value="v2"
+        )
 
         assert isinstance(result, ComparisonResult)
         assert result.tag == "prompt"
@@ -88,7 +90,9 @@ class TestCompareRuns:
         check3 = check(trace3, scene3.expectations)
         storage.save(trace3, scene3, check_result=check3, tags={"model": "claude"})
 
-        result = compare_runs(storage, tag="model", before_value="gpt-4", after_value="claude")
+        result = compare_runs(
+            storage, tag="model", before_value="gpt-4", after_value="claude"
+        )
 
         assert result.before_runs == 1
         assert result.after_runs == 1
@@ -99,19 +103,30 @@ class TestCompareRuns:
         trace1 = _make_trace("scene_1", ["tool_a"])
         scene1 = _make_scene("scene_1")
         check1 = check(trace1, scene1.expectations)
-        storage.save(trace1, scene1, check_result=check1, tags={"model": "gpt-4", "prompt": "v1"})
+        storage.save(
+            trace1, scene1, check_result=check1, tags={"model": "gpt-4", "prompt": "v1"}
+        )
 
         trace2 = _make_trace("scene_2", ["tool_b"])
         scene2 = _make_scene("scene_2")
         check2 = check(trace2, scene2.expectations)
-        storage.save(trace2, scene2, check_result=check2, tags={"model": "claude", "prompt": "v1"})
+        storage.save(
+            trace2,
+            scene2,
+            check_result=check2,
+            tags={"model": "claude", "prompt": "v1"},
+        )
 
         trace3 = _make_trace("scene_3", ["tool_c"])
         scene3 = _make_scene("scene_3")
         check3 = check(trace3, scene3.expectations)
-        storage.save(trace3, scene3, check_result=check3, tags={"model": "gpt-4", "prompt": "v2"})
+        storage.save(
+            trace3, scene3, check_result=check3, tags={"model": "gpt-4", "prompt": "v2"}
+        )
 
-        result = compare_runs(storage, tag="model", before_value="gpt-4", after_value="claude")
+        result = compare_runs(
+            storage, tag="model", before_value="gpt-4", after_value="claude"
+        )
 
         assert result.before_runs == 2
         assert result.after_runs == 1
@@ -156,7 +171,9 @@ class TestCompareRuns:
         check2 = check(trace2, scene2.expectations)
         storage.save(trace2, scene2, check_result=check2, tags={"version": "after"})
 
-        result = compare_runs(storage, tag="version", before_value="before", after_value="after")
+        result = compare_runs(
+            storage, tag="version", before_value="before", after_value="after"
+        )
 
         assert result.tool_usage_before["lookup_order"] == 1
         assert result.tool_usage_before["get_policy"] == 1
@@ -173,15 +190,21 @@ class TestCompareRuns:
             trace = _make_trace("scene", ["tool_a"], terminal_state=state)
             scene = _make_scene("scene")
             check_result = check(trace, scene.expectations)
-            storage.save(trace, scene, check_result=check_result, tags={"version": "before"})
+            storage.save(
+                trace, scene, check_result=check_result, tags={"version": "before"}
+            )
 
         for state in ["done", "failed", "failed"]:
             trace = _make_trace("scene", ["tool_a"], terminal_state=state)
             scene = _make_scene("scene")
             check_result = check(trace, scene.expectations)
-            storage.save(trace, scene, check_result=check_result, tags={"version": "after"})
+            storage.save(
+                trace, scene, check_result=check_result, tags={"version": "after"}
+            )
 
-        result = compare_runs(storage, tag="version", before_value="before", after_value="after")
+        result = compare_runs(
+            storage, tag="version", before_value="before", after_value="after"
+        )
 
         assert result.terminal_states_before["done"] == 2
         assert result.terminal_states_before["failed"] == 1
@@ -197,7 +220,9 @@ class TestCompareRuns:
         storage.save(trace, scene, check_result=check_result, tags={"version": "after"})
 
         with pytest.raises(ValueError, match="No runs found with version=before"):
-            compare_runs(storage, tag="version", before_value="before", after_value="after")
+            compare_runs(
+                storage, tag="version", before_value="before", after_value="after"
+            )
 
     def test_empty_after_group_raises(self, tmp_path):
         storage = RunStorage(path=tmp_path / "runs")
@@ -205,10 +230,14 @@ class TestCompareRuns:
         trace = _make_trace("scene_1", ["tool_a"])
         scene = _make_scene("scene_1")
         check_result = check(trace, scene.expectations)
-        storage.save(trace, scene, check_result=check_result, tags={"version": "before"})
+        storage.save(
+            trace, scene, check_result=check_result, tags={"version": "before"}
+        )
 
         with pytest.raises(ValueError, match="No runs found with version=after"):
-            compare_runs(storage, tag="version", before_value="before", after_value="after")
+            compare_runs(
+                storage, tag="version", before_value="before", after_value="after"
+            )
 
     def test_missing_tag_key_no_match(self, tmp_path):
         storage = RunStorage(path=tmp_path / "runs")
@@ -216,10 +245,14 @@ class TestCompareRuns:
         trace = _make_trace("scene_1", ["tool_a"])
         scene = _make_scene("scene_1")
         check_result = check(trace, scene.expectations)
-        storage.save(trace, scene, check_result=check_result, tags={"other_tag": "value"})
+        storage.save(
+            trace, scene, check_result=check_result, tags={"other_tag": "value"}
+        )
 
         with pytest.raises(ValueError, match="No runs found with nonexistent=value1"):
-            compare_runs(storage, tag="nonexistent", before_value="value1", after_value="value2")
+            compare_runs(
+                storage, tag="nonexistent", before_value="value1", after_value="value2"
+            )
 
     def test_pass_rate_delta(self, tmp_path):
         storage = RunStorage(path=tmp_path / "runs")
@@ -245,7 +278,9 @@ class TestCompareRuns:
         check4 = check(trace4, scene4.expectations)
         storage.save(trace4, scene4, check_result=check4, tags={"version": "after"})
 
-        result = compare_runs(storage, tag="version", before_value="before", after_value="after")
+        result = compare_runs(
+            storage, tag="version", before_value="before", after_value="after"
+        )
 
         assert result.before_pass_rate == 0.5
         assert result.after_pass_rate == 1.0
@@ -265,7 +300,9 @@ class TestCompareRuns:
             )
             scene = _make_scene("scene")
             check_result = check(trace, scene.expectations)
-            storage.save(trace, scene, check_result=check_result, tags={"version": "before"})
+            storage.save(
+                trace, scene, check_result=check_result, tags={"version": "before"}
+            )
 
         for _ in range(2):
             trace = Trace(
@@ -280,9 +317,13 @@ class TestCompareRuns:
             )
             scene = _make_scene("scene")
             check_result = check(trace, scene.expectations)
-            storage.save(trace, scene, check_result=check_result, tags={"version": "after"})
+            storage.save(
+                trace, scene, check_result=check_result, tags={"version": "after"}
+            )
 
-        result = compare_runs(storage, tag="version", before_value="before", after_value="after")
+        result = compare_runs(
+            storage, tag="version", before_value="before", after_value="after"
+        )
 
         assert result.before_avg_turns == 2.0
         assert result.after_avg_turns == 4.0

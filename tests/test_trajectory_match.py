@@ -1,7 +1,10 @@
 """Tests for trajectory matching metric."""
 
 from understudy import Expectations, ToolCall, Trace, Turn, check
-from understudy.metrics.builtins import _compute_trajectory_score, compute_trajectory_match
+from understudy.metrics.builtins import (
+    _compute_trajectory_score,
+    compute_trajectory_match,
+)
 
 
 class TestTrajectoryScore:
@@ -18,7 +21,9 @@ class TestTrajectoryScore:
         assert score == 0.0
 
     def test_exact_mismatch_extra_tools(self):
-        score, _ = _compute_trajectory_score(["a", "b", "c", "d"], ["a", "b", "c"], "exact")
+        score, _ = _compute_trajectory_score(
+            ["a", "b", "c", "d"], ["a", "b", "c"], "exact"
+        )
         assert score == 0.0
 
     def test_prefix_match(self):
@@ -38,19 +43,27 @@ class TestTrajectoryScore:
         assert score == 0.0
 
     def test_contains_match(self):
-        score, _ = _compute_trajectory_score(["a", "x", "b", "y", "c"], ["a", "b", "c"], "contains")
+        score, _ = _compute_trajectory_score(
+            ["a", "x", "b", "y", "c"], ["a", "b", "c"], "contains"
+        )
         assert score == 1.0
 
     def test_contains_match_exact(self):
-        score, _ = _compute_trajectory_score(["a", "b", "c"], ["a", "b", "c"], "contains")
+        score, _ = _compute_trajectory_score(
+            ["a", "b", "c"], ["a", "b", "c"], "contains"
+        )
         assert score == 1.0
 
     def test_contains_match_subset(self):
-        score, _ = _compute_trajectory_score(["a", "b", "c", "d"], ["a", "c"], "contains")
+        score, _ = _compute_trajectory_score(
+            ["a", "b", "c", "d"], ["a", "c"], "contains"
+        )
         assert score == 1.0
 
     def test_contains_mismatch_wrong_order(self):
-        score, _ = _compute_trajectory_score(["c", "b", "a"], ["a", "b", "c"], "contains")
+        score, _ = _compute_trajectory_score(
+            ["c", "b", "a"], ["a", "b", "c"], "contains"
+        )
         assert score == 0.0
 
     def test_contains_mismatch_missing(self):
@@ -89,7 +102,9 @@ class TestTrajectoryMatchMetric:
                 Turn(
                     role="agent",
                     content="done",
-                    tool_calls=[ToolCall(tool_name=name, arguments={}) for name in tool_names],
+                    tool_calls=[
+                        ToolCall(tool_name=name, arguments={}) for name in tool_names
+                    ],
                 )
             ],
         )

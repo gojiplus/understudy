@@ -104,7 +104,9 @@ def run_agentic(
                 handler = mocks.get_handler(result.action)
                 if handler:
                     try:
-                        result.observation = mocks.call(result.action, **(result.action_args or {}))
+                        result.observation = mocks.call(
+                            result.action, **(result.action_args or {})
+                        )
                         result.error = None
                     except Exception as e:
                         result.error = str(e)
@@ -127,10 +129,14 @@ def run_agentic(
             total_tokens += result.tokens_used
             if max_tokens and total_tokens > max_tokens:
                 trace.outcome = "max_tokens_exceeded"
-                logger.warning("Scene %s: max tokens exceeded (%d)", scene.id, max_tokens)
+                logger.warning(
+                    "Scene %s: max tokens exceeded (%d)", scene.id, max_tokens
+                )
                 break
 
-            logger.debug("Step %d: %s - %s", step_number, result.step_type, result.action or "")
+            logger.debug(
+                "Step %d: %s - %s", step_number, result.step_type, result.action or ""
+            )
 
         if trace.outcome == "pending":
             trace.outcome = app.get_outcome()

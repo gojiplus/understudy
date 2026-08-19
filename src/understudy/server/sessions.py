@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from ..models import Expectations, Persona, Scene
@@ -20,7 +20,8 @@ class Session:
     simulator: UISimulator
     trace: Trace
     turn_count: int = 0
-    created_at: datetime = field(default_factory=datetime.now)
+    # Aware UTC, to match every other timestamp this module records.
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     finished: bool = False
     finish_reason: str | None = None
 
@@ -30,22 +31,20 @@ class Session:
         tool_calls: list[ToolCallInput] | None = None,
     ) -> None:
         """Record an agent turn from the UI."""
-        tc_list = []
-        if tool_calls:
-            for tc in tool_calls:
-                tc_list.append(
-                    ToolCall(
-                        tool_name=tc.tool_name,
-                        arguments=tc.arguments,
-                        result=tc.result,
-                    )
-                )
+        tc_list = [
+            ToolCall(
+                tool_name=tc.tool_name,
+                arguments=tc.arguments,
+                result=tc.result,
+            )
+            for tc in tool_calls or []
+        ]
         self.trace.turns.append(
             Turn(
                 role="agent",
                 content=content,
                 tool_calls=tc_list,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(UTC),
             )
         )
 
@@ -55,7 +54,7 @@ class Session:
             Turn(
                 role="user",
                 content=content,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(UTC),
             )
         )
         self.turn_count += 1
@@ -64,7 +63,7 @@ class Session:
         """Mark the session as finished."""
         self.finished = True
         self.finish_reason = reason
-        self.trace.finished_at = datetime.now()
+        self.trace.finished_at = datetime.now(UTC)
         self.trace.terminal_state = reason
 
 
@@ -72,6 +71,7 @@ class SessionManager:
     """Manages simulation sessions."""
 
     def __init__(self, default_model: str = "gpt-4o"):
+        """Create an empty session registry with a default simulator model."""
         self.sessions: dict[str, Session] = {}
         self.default_model = default_model
         self._backend_factory: type | None = None
@@ -98,7 +98,7 @@ class SessionManager:
                     max_tokens=500,
                 )
                 content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
-                return content if content else ""
+                return content or ""
 
         return LiteLLMBackend(model)
 
@@ -137,7 +137,7 @@ class SessionManager:
 
         trace = Trace(
             scene_id=scene.id,
-            started_at=datetime.now(),
+            started_at=datetime.now(UTC),
         )
 
         session = Session(

@@ -7,8 +7,6 @@ from typing import Any
 class ToolError(Exception):
     """Raised by mock tools to signal an error to the agent."""
 
-    pass
-
 
 class MockToolkit:
     """A collection of mock tool handlers for testing.
@@ -29,6 +27,7 @@ class MockToolkit:
     """
 
     def __init__(self):
+        """Create an empty toolkit with no registered mock handlers."""
         self._handlers: dict[str, Callable[..., Any]] = {}
 
     def handle(self, tool_name: str) -> Callable:
@@ -53,4 +52,5 @@ class MockToolkit:
 
     @property
     def available_tools(self) -> list[str]:
+        """Names of all tools that have a registered mock handler."""
         return list(self._handlers.keys())

@@ -72,6 +72,7 @@ class SceneTestItem:
         trace: Trace | None = None,
         error: str | None = None,
     ):
+        """Bundle a scene with its rehearsal trace and any capture error."""
         self.scene = scene
         self.trace = trace
         self.error = error
@@ -103,7 +104,9 @@ def scene(request: pytest.FixtureRequest) -> Scene | None:
 
 
 @pytest.fixture
-def trace(request: pytest.FixtureRequest, app, mocks, scene: Scene | None) -> Trace | None:
+def trace(
+    request: pytest.FixtureRequest, app, mocks, scene: Scene | None
+) -> Trace | None:
     """Fixture that runs the scene and provides the execution trace.
 
     This fixture:
@@ -116,16 +119,16 @@ def trace(request: pytest.FixtureRequest, app, mocks, scene: Scene | None) -> Tr
     if scene is None:
         return None
 
-    model = request.config.getoption("understudy_model", "gpt-4o")
+    # getoption is typed Any | None; run() wants a concrete model name.
+    model = str(request.config.getoption("understudy_model", "gpt-4o"))
 
     try:
-        trace_result = run(
+        return run(
             app=app,
             scene=scene,
             mocks=mocks,
             simulator_model=model,
         )
-        return trace_result
     except Exception as e:
         pytest.fail(f"Scene execution failed: {e}")
 
@@ -167,23 +170,6 @@ def suite_results(request: pytest.FixtureRequest, app, mocks) -> Any:
     )
 
 
-def pytest_collection_modifyitems(
-    session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
-) -> None:
-    """Process scene markers on collected tests."""
-    for item in items:
-        marker = item.get_closest_marker("scene")
-        if marker:
-            pass
-
-
-def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Generate report at end of session if requested."""
-    report_path = session.config.getoption("understudy_report")
-    if report_path:
-        pass
-
-
 class AssertionHelpers:
     """Helper methods for trace assertions.
 
@@ -218,4 +204,6 @@ class AssertionHelpers:
     def assert_terminal_state(trace: Trace, expected: str) -> None:
         """Assert the terminal state of the conversation."""
         if trace.terminal_state != expected:
-            pytest.fail(f"Expected terminal state '{expected}', got '{trace.terminal_state}'")
+            pytest.fail(
+                f"Expected terminal state '{expected}', got '{trace.terminal_state}'"
+            )
