@@ -81,7 +81,7 @@ def get_return_policy(category: str) -> dict:
 
 @tool
 @mockable_tool
-def create_return(order_id: str, item_sku: str, reason: str) -> dict:  # noqa: ARG001
+def create_return(order_id: str, item_sku: str, reason: str) -> dict:
     """Create a return request for an item.
 
     Args:
@@ -97,7 +97,7 @@ def create_return(order_id: str, item_sku: str, reason: str) -> dict:  # noqa: A
 
 @tool
 @mockable_tool
-def escalate_to_human(reason: str) -> dict:  # noqa: ARG001
+def escalate_to_human(reason: str) -> dict:
     """Escalate the conversation to a human agent.
 
     Args:
@@ -109,14 +109,21 @@ def escalate_to_human(reason: str) -> dict:  # noqa: ARG001
     raise NotImplementedError("Real implementation not available - use mocks")
 
 
-tools = [lookup_order, lookup_customer_orders, get_return_policy, create_return, escalate_to_human]
+tools = [
+    lookup_order,
+    lookup_customer_orders,
+    get_return_policy,
+    create_return,
+    escalate_to_human,
+]
 
 
 def create_customer_service_agent(model):
     """Create the LangGraph customer service agent.
 
     Args:
-        model: A LangChain chat model with tools bound (e.g., ChatOpenAI(...).bind_tools(tools))
+        model: A LangChain chat model with tools bound
+            (e.g., ChatOpenAI(...).bind_tools(tools))
 
     Returns:
         Compiled LangGraph agent.

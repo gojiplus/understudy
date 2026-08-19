@@ -62,7 +62,11 @@ class TestLangGraphApp:
                 }
             }
             yield {
-                "agent": {"messages": [AIMessage(content="Your order ORD-123 has been delivered.")]}
+                "agent": {
+                    "messages": [
+                        AIMessage(content="Your order ORD-123 has been delivered.")
+                    ]
+                }
             }
 
         class MockGraph:
@@ -125,7 +129,11 @@ class TestLangGraphApp:
                     ]
                 }
             }
-            yield {"agent": {"messages": [AIMessage(content="Found 1 order for customer.")]}}
+            yield {
+                "agent": {
+                    "messages": [AIMessage(content="Found 1 order for customer.")]
+                }
+            }
 
         class MockGraph:
             def stream(self, input_state, config=None, stream_mode=None):

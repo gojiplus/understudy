@@ -28,6 +28,7 @@ class SceneResult:
 
     @property
     def passed(self) -> bool:
+        """True when the scene ran without error and all checks passed."""
         return self.error is None and self.check_result.passed
 
 
@@ -39,28 +40,35 @@ class SuiteResults:
 
     @property
     def all_passed(self) -> bool:
+        """True when every scene in the suite passed."""
         return all(r.passed for r in self.results)
 
     @property
     def pass_count(self) -> int:
+        """Number of scenes that passed."""
         return sum(1 for r in self.results if r.passed)
 
     @property
     def fail_count(self) -> int:
+        """Number of scenes that failed."""
         return sum(1 for r in self.results if not r.passed)
 
     @property
     def failed(self) -> list[SceneResult]:
+        """Return only the scene results that did not pass."""
         return [r for r in self.results if not r.passed]
 
     def summary(self) -> str:
+        """Render a pass count plus a line per failed scene."""
         lines = [f"{self.pass_count}/{len(self.results)} passed"]
         for r in self.failed:
             if r.error:
                 lines.append(f"  FAILED: {r.scene_id} (error: {r.error})")
             else:
-                for c in r.check_result.failed_checks:
-                    lines.append(f"  FAILED: {r.scene_id} ({c.label}: {c.detail})")
+                lines.extend(
+                    f"  FAILED: {r.scene_id} ({c.label}: {c.detail})"
+                    for c in r.check_result.failed_checks
+                )
         return "\n".join(lines)
 
     def to_junit_xml(self, path: str | Path) -> None:
@@ -90,7 +98,9 @@ class SuiteResults:
                 if r.error:
                     ET.SubElement(testcase, "failure", message=r.error, type="error")
                 else:
-                    msgs = [f"{c.label}: {c.detail}" for c in r.check_result.failed_checks]
+                    msgs = [
+                        f"{c.label}: {c.detail}" for c in r.check_result.failed_checks
+                    ]
                     ET.SubElement(
                         testcase,
                         "failure",
@@ -130,7 +140,9 @@ class _SuiteExecutor(BatchExecutor[_SuiteTask, SceneResult]):
 
     def execute_one(self, item: _SuiteTask) -> SceneResult:
         scene_id_with_index = (
-            f"{item.scene.id}" if item.sim_index == 0 else f"{item.scene.id}_{item.sim_index}"
+            f"{item.scene.id}"
+            if item.sim_index == 0
+            else f"{item.scene.id}_{item.sim_index}"
         )
         try:
             trace = run(self.app, item.scene, **self.run_kwargs)
@@ -141,7 +153,9 @@ class _SuiteExecutor(BatchExecutor[_SuiteTask, SceneResult]):
                 check_result=result,
             )
             if self.storage:
-                self.storage.save(trace, item.scene, check_result=result, tags=self.tags)
+                self.storage.save(
+                    trace, item.scene, check_result=result, tags=self.tags
+                )
             return scene_result
         except Exception as e:
             return SceneResult(
@@ -156,6 +170,7 @@ class Suite:
     """A collection of scenes to run as a test suite."""
 
     def __init__(self, scenes: list[Scene]):
+        """Wrap a list of scenes to run together."""
         self.scenes = scenes
 
     @classmethod

@@ -83,7 +83,9 @@ id: test
         with pytest.raises(SceneValidationError) as exc_info:
             Scene.from_file(scene_file)
 
-        assert "Invalid YAML syntax" in str(exc_info.value) or "YAML" in str(exc_info.value)
+        assert "Invalid YAML syntax" in str(exc_info.value) or "YAML" in str(
+            exc_info.value
+        )
 
     def test_file_not_found(self, tmp_path):
         with pytest.raises(FileNotFoundError):
@@ -91,7 +93,7 @@ id: test
 
 
 class TestCommonMistakeWarnings:
-    def test_warns_about_prompt_vs_starting_prompt(self, tmp_path, capsys):
+    def test_warns_about_prompt_vs_starting_prompt(self, tmp_path):
         scene_file = tmp_path / "test.yaml"
         scene_file.write_text("""\
 id: test
@@ -99,13 +101,13 @@ prompt: Hello
 conversation_plan: Do something
 persona: cooperative
 """)
-        with pytest.raises(SceneValidationError):
+        with (
+            pytest.warns(UserWarning, match="starting_prompt"),
+            pytest.raises(SceneValidationError),
+        ):
             Scene.from_file(scene_file)
 
-        captured = capsys.readouterr()
-        assert "starting_prompt" in captured.err or "prompt" in captured.err
-
-    def test_warns_about_unknown_persona_preset(self, tmp_path, capsys):
+    def test_warns_about_unknown_persona_preset(self, tmp_path):
         scene_file = tmp_path / "test.yaml"
         scene_file.write_text("""\
 id: test
@@ -113,11 +115,11 @@ starting_prompt: Hello
 conversation_plan: Do something
 persona: unknown_preset
 """)
-        with pytest.raises((SceneValidationError, ValueError)):
+        with (
+            pytest.warns(UserWarning, match="unknown_preset"),
+            pytest.raises((SceneValidationError, ValueError)),
+        ):
             Scene.from_file(scene_file)
-
-        captured = capsys.readouterr()
-        assert "unknown_preset" in captured.err or "cooperative" in captured.err
 
 
 class TestValidSceneLoading:

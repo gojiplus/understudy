@@ -1,12 +1,18 @@
 """Built-in metrics: standard evaluation metrics."""
 
-from ..models import Expectations
-from ..trace import Trace
+from typing import TYPE_CHECKING
+
 from .registry import MetricRegistry, MetricResult
 
+if TYPE_CHECKING:
+    from ..models import Expectations
+    from ..trace import Trace
 
-@MetricRegistry.register("efficiency", description="Token and latency efficiency metrics")
-def compute_efficiency(trace: "Trace", expectations: "Expectations") -> MetricResult:
+
+@MetricRegistry.register(
+    "efficiency", description="Token and latency efficiency metrics"
+)
+def compute_efficiency(trace: "Trace", _expectations: "Expectations") -> MetricResult:
     """Compute efficiency metrics: token counts, latency, turn count."""
     metrics = trace.metrics
     return MetricResult(
@@ -23,8 +29,12 @@ def compute_efficiency(trace: "Trace", expectations: "Expectations") -> MetricRe
     )
 
 
-@MetricRegistry.register("resolution_match", description="Check if terminal state matches expected")
-def compute_resolution_match(trace: "Trace", expectations: "Expectations") -> MetricResult:
+@MetricRegistry.register(
+    "resolution_match", description="Check if terminal state matches expected"
+)
+def compute_resolution_match(
+    trace: "Trace", expectations: "Expectations"
+) -> MetricResult:
     """Check if the trace terminal_state matches the expected resolution."""
     if not expectations.expected_resolution:
         return MetricResult(
@@ -44,7 +54,9 @@ def compute_resolution_match(trace: "Trace", expectations: "Expectations") -> Me
 
 
 @MetricRegistry.register("tool_trajectory", description="Tool call sequence analysis")
-def compute_tool_trajectory(trace: "Trace", expectations: "Expectations") -> MetricResult:
+def compute_tool_trajectory(
+    trace: "Trace", _expectations: "Expectations"
+) -> MetricResult:
     """Compute tool trajectory metrics: sequence, unique tools, total calls."""
     sequence = trace.call_sequence()
     return MetricResult(
@@ -87,8 +99,12 @@ def _compute_trajectory_score(
     return 0.0, f"Unknown mode: {mode}"
 
 
-@MetricRegistry.register("trajectory_match", description="Compare tool sequence against expected")
-def compute_trajectory_match(trace: "Trace", expectations: "Expectations") -> MetricResult:
+@MetricRegistry.register(
+    "trajectory_match", description="Compare tool sequence against expected"
+)
+def compute_trajectory_match(
+    trace: "Trace", expectations: "Expectations"
+) -> MetricResult:
     """Check if actual tool sequence matches expected trajectory."""
     if expectations.expected_trajectory is None:
         return MetricResult(

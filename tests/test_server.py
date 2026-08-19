@@ -107,7 +107,8 @@ class TestProcessTurn:
         def create_backend(_model: str):
             return MockBackend(
                 [
-                    '{"type": "type", "target": {"id": "input", "selector": "input.chat"}, '
+                    '{"type": "type", "target": {"id": "input", '
+                    '"selector": "input.chat"}, '
                     '"value": "My order number is 12345"}',
                     '{"done": true, "reason": "finished"}',
                 ]
@@ -374,7 +375,9 @@ class TestUISimulator:
 
         affordances = [
             Affordance(id="main-input", type="text_input", selector="input.main"),
-            Affordance(id="submit", type="button", selector="button.submit", label="Send"),
+            Affordance(
+                id="submit", type="button", selector="button.submit", label="Send"
+            ),
         ]
 
         action = simulator.get_first_action("Hello there", affordances)
@@ -444,8 +447,10 @@ class TestUISimulator:
     def test_history_tracking(self):
         backend = MockBackend(
             [
-                '{"type": "type", "target": {"id": "in", "selector": "input"}, "value": "first"}',
-                '{"type": "type", "target": {"id": "in", "selector": "input"}, "value": "second"}',
+                '{"type": "type", "target": {"id": "in", "selector": "input"}, '
+                '"value": "first"}',
+                '{"type": "type", "target": {"id": "in", "selector": "input"}, '
+                '"value": "second"}',
             ]
         )
         simulator = UISimulator(
@@ -488,7 +493,8 @@ class TestIntegration:
                     "scene": {
                         "id": "return_flow",
                         "starting_prompt": "I want to return an item",
-                        "conversation_plan": "Return item from order ORD-12345, reason: defective",
+                        "conversation_plan": "Return item from order "
+                        "ORD-12345, reason: defective",
                         "persona": "cooperative",
                         "expectations": {"required_tools": ["create_return"]},
                     },
@@ -498,7 +504,12 @@ class TestIntegration:
 
             affordances = [
                 {"id": "input", "type": "text_input", "selector": "input"},
-                {"id": "send", "type": "button", "selector": "button.send", "label": "Send"},
+                {
+                    "id": "send",
+                    "type": "button",
+                    "selector": "button.send",
+                    "label": "Send",
+                },
             ]
 
             turn1 = client.post(
@@ -527,7 +538,10 @@ class TestIntegration:
                     "displayedContent": "Your return has been created.",
                     "affordances": affordances,
                     "toolCalls": [
-                        {"tool_name": "create_return", "arguments": {"order_id": "ORD-12345"}}
+                        {
+                            "tool_name": "create_return",
+                            "arguments": {"order_id": "ORD-12345"},
+                        }
                     ],
                 },
             )

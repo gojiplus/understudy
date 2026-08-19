@@ -79,18 +79,22 @@ class AgenticTrace(BaseModel):
 
     @property
     def total_steps(self) -> int:
+        """Number of steps recorded in the trace."""
         return len(self.steps)
 
     @property
     def total_tokens(self) -> int:
+        """Sum of tokens used across all steps."""
         return sum(s.tokens_used for s in self.steps)
 
     @property
     def total_latency_ms(self) -> int:
+        """Sum of per-step latency in milliseconds."""
         return sum(s.latency_ms for s in self.steps)
 
     @property
     def duration(self) -> timedelta | None:
+        """Wall-clock duration, or None if start/finish is missing."""
         if self.started_at and self.finished_at:
             return self.finished_at - self.started_at
         return None
@@ -98,19 +102,17 @@ class AgenticTrace(BaseModel):
     @property
     def tool_calls(self) -> list[ToolCall]:
         """Compatibility property for shared tooling."""
-        calls = []
-        for step in self.steps:
-            if step.step_type == "act" and step.action:
-                calls.append(
-                    ToolCall(
-                        tool_name=step.action,
-                        arguments=step.action_args,
-                        result=step.observation,
-                        timestamp=step.timestamp,
-                        error=step.error,
-                    )
-                )
-        return calls
+        return [
+            ToolCall(
+                tool_name=step.action,
+                arguments=step.action_args,
+                result=step.observation,
+                timestamp=step.timestamp,
+                error=step.error,
+            )
+            for step in self.steps
+            if step.step_type == "act" and step.action
+        ]
 
     def action_sequence(self) -> list[str]:
         """Ordered list of action names taken."""
@@ -118,7 +120,9 @@ class AgenticTrace(BaseModel):
 
     def actions_to(self, action_name: str) -> list[Step]:
         """Get all steps for a specific action."""
-        return [s for s in self.steps if s.step_type == "act" and s.action == action_name]
+        return [
+            s for s in self.steps if s.step_type == "act" and s.action == action_name
+        ]
 
     def performed(self, action_name: str, **kwargs: Any) -> bool:
         """Check if an action was performed, optionally with specific args."""
@@ -180,8 +184,12 @@ class AgenticTrace(BaseModel):
 
         artifacts = []
         for artifact_data in data.get("artifacts", []):
-            if "timestamp" in artifact_data and isinstance(artifact_data["timestamp"], str):
-                artifact_data["timestamp"] = datetime.fromisoformat(artifact_data["timestamp"])
+            if "timestamp" in artifact_data and isinstance(
+                artifact_data["timestamp"], str
+            ):
+                artifact_data["timestamp"] = datetime.fromisoformat(
+                    artifact_data["timestamp"]
+                )
             artifacts.append(Artifact(**artifact_data))
 
         started_at = data.get("started_at")
@@ -208,7 +216,7 @@ class AgenticTrace(BaseModel):
     def from_file(cls, path: Path | str) -> "AgenticTrace":
         """Load an AgenticTrace from a JSON file."""
         path = Path(path)
-        with open(path) as f:
+        with path.open() as f:
             data = json.load(f)
         return cls.from_json(data)
 
@@ -231,8 +239,12 @@ class AgenticScene(BaseModel):
         path = Path(path)
 
         try:
-            with open(path) as f:
-                data = yaml.safe_load(f) if path.suffix in (".yaml", ".yml") else json.load(f)
+            with path.open() as f:
+                data = (
+                    yaml.safe_load(f)
+                    if path.suffix in (".yaml", ".yml")
+                    else json.load(f)
+                )
         except FileNotFoundError as e:
             raise FileNotFoundError(f"Scene file not found: {path}") from e
         except yaml.YAMLError as e:
@@ -247,7 +259,7 @@ class AgenticScene(BaseModel):
             return cls._from_dict(data)
         except ValidationError as e:
             raise SceneValidationError(
-                format_pydantic_error(e, file_path=path, data=data), file_path=path
+                format_pydantic_error(e, file_path=path), file_path=path
             ) from e
 
     @classmethod

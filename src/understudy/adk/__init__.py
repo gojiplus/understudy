@@ -38,14 +38,15 @@ def _create_mock_callback(mocks: MockToolkit | None):
         Returns None to allow normal execution.
     """
 
-    def callback(tool, args: dict[str, Any], tool_context) -> dict | None:
+    # google-adk invokes before_tool_callback with these exact keyword
+    # arguments; tool_context is part of that fixed signature.
+    def callback(tool, args: dict[str, Any], tool_context) -> dict | None:  # noqa: ARG001
         if mocks is None:
             return None
         tool_name = getattr(tool, "name", None) or getattr(tool, "__name__", str(tool))
         if mocks.get_handler(tool_name):
             try:
-                result = mocks.call(tool_name, **args)
-                return result
+                return mocks.call(tool_name, **args)
             except Exception as e:
                 return {"error": str(e)}
         return None
@@ -66,7 +67,8 @@ class ADKApp(AgentApp):
     """
 
     def __init__(self, agent: Any, session_id: str | None = None):
-        """
+        """Wrap a google-adk agent.
+
         Args:
             agent: A google.adk.Agent instance.
             session_id: Optional session ID. If None, a random one is generated.
@@ -104,7 +106,11 @@ class ADKApp(AgentApp):
         self._agent_transfers = []
         self._session_id = self.session_id or str(uuid.uuid4())
 
-        logger.debug("Starting ADK session %s for agent %s", self._session_id, self._current_agent)
+        logger.debug(
+            "Starting ADK session %s for agent %s",
+            self._session_id,
+            self._current_agent,
+        )
 
         self._session_service = InMemorySessionService()
         if mocks:
@@ -220,7 +226,11 @@ class ADKApp(AgentApp):
                         break
 
             # capture text responses from content parts
-            if hasattr(event, "content") and event.content and hasattr(event.content, "parts"):
+            if (
+                hasattr(event, "content")
+                and event.content
+                and hasattr(event.content, "parts")
+            ):
                 for part in event.content.parts or []:
                     text = getattr(part, "text", None)
                     if text:

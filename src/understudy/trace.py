@@ -22,26 +22,36 @@ class TraceMetrics(BaseModel):
 
     @property
     def total_input_tokens(self) -> int:
+        """Sum of input tokens across all turns."""
         return sum(t.input_tokens for t in self.turns)
 
     @property
     def total_output_tokens(self) -> int:
+        """Sum of output tokens across all turns."""
         return sum(t.output_tokens for t in self.turns)
 
     @property
     def total_thinking_tokens(self) -> int:
+        """Sum of thinking tokens across all turns."""
         return sum(t.thinking_tokens for t in self.turns)
 
     @property
     def total_tokens(self) -> int:
-        return self.total_input_tokens + self.total_output_tokens + self.total_thinking_tokens
+        """Combined input, output, and thinking tokens across all turns."""
+        return (
+            self.total_input_tokens
+            + self.total_output_tokens
+            + self.total_thinking_tokens
+        )
 
     @property
     def agent_time_ms(self) -> int:
+        """Total agent latency in milliseconds across all turns."""
         return sum(t.latency_ms for t in self.turns)
 
     @property
     def avg_turn_latency_ms(self) -> float:
+        """Mean agent latency per turn in milliseconds (0 if no turns)."""
         return self.agent_time_ms / len(self.turns) if self.turns else 0
 
 
@@ -108,16 +118,26 @@ class Trace(BaseModel):
 
     @property
     def turn_count(self) -> int:
+        """Number of turns recorded in the trace."""
         return len(self.turns)
 
     @property
     def duration(self) -> timedelta | None:
+        """Wall-clock duration, or None if start/finish is missing."""
         if self.started_at and self.finished_at:
             return self.finished_at - self.started_at
         return None
 
     def called(self, tool_name: str, **kwargs: Any) -> bool:
         """Check if a tool was called, optionally with specific arguments.
+
+        Args:
+            tool_name: Name of the tool to look for.
+            **kwargs: Argument values the call must have made, compared by
+                equality against the recorded call arguments.
+
+        Returns:
+            True if a matching call exists in the trace.
 
         Examples:
             trace.called("lookup_order")
@@ -169,7 +189,10 @@ class Trace(BaseModel):
 
     def agent_called(self, agent: str, tool: str) -> bool:
         """Check if a specific agent called a specific tool."""
-        return any(call.agent_name == agent and call.tool_name == tool for call in self.tool_calls)
+        return any(
+            call.agent_name == agent and call.tool_name == tool
+            for call in self.tool_calls
+        )
 
     def calls_by_agent(self, agent: str) -> list[ToolCall]:
         """Get all tool calls made by a specific agent."""

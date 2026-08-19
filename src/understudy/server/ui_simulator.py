@@ -9,7 +9,9 @@ from .models import Action, ActionTarget, Affordance
 class SimulatorBackend(Protocol):
     """Protocol for LLM backends that generate user actions."""
 
-    def generate(self, prompt: str) -> str: ...
+    def generate(self, prompt: str) -> str:
+        """Return the model's raw text response for the prompt."""
+        ...
 
 
 UI_SIMULATOR_SYSTEM_PROMPT = """\
@@ -45,7 +47,8 @@ Based on your conversation plan and the current state, what action should you ta
 Output one of:
 1. Type: {{"type": "type", "target": {{"id": "x", "selector": "s"}}, "value": "text"}}
 2. Click: {{"type": "click", "target": {{"id": "x", "selector": "s"}}}}
-3. Select: {{"type": "select", "target": {{"id": "x", "selector": "s"}}, "value": "opt"}}
+3. Select: {{"type": "select", "target": {{"id": "x", "selector": "s"}}, \
+"value": "opt"}}
 4. Check: {{"type": "check", "target": {{"id": "x", "selector": "s"}}, "checked": true}}
 5. Wait: {{"type": "wait", "duration": 1000}}
 6. Done: {{"done": true, "reason": "finished"}}
@@ -64,6 +67,7 @@ class UISimulator:
         conversation_plan: str,
         persona_prompt: str,
     ):
+        """Build the system prompt from the persona and conversation plan."""
         self.backend = backend
         self.system_prompt = UI_SIMULATOR_SYSTEM_PROMPT.format(
             persona=persona_prompt,
@@ -71,9 +75,13 @@ class UISimulator:
         )
         self.history: list[dict[str, str]] = []
 
-    def get_first_action(self, starting_prompt: str, affordances: list[Affordance]) -> Action:
+    def get_first_action(
+        self, starting_prompt: str, affordances: list[Affordance]
+    ) -> Action:
         """Generate the first action to type the starting prompt."""
-        text_inputs = [a for a in affordances if a.type == "text_input" and not a.disabled]
+        text_inputs = [
+            a for a in affordances if a.type == "text_input" and not a.disabled
+        ]
         if text_inputs:
             target = text_inputs[0]
             return Action(
@@ -94,8 +102,7 @@ class UISimulator:
             text = text[7:]
         elif text.startswith("```"):
             text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
+        text = text.removesuffix("```")
         return text.strip()
 
     def next_action(
@@ -122,7 +129,11 @@ class UISimulator:
         )
 
         full_prompt = (
-            self.system_prompt + "\n\nCONVERSATION SO FAR:\n" + history_text + "\n" + action_prompt
+            self.system_prompt
+            + "\n\nCONVERSATION SO FAR:\n"
+            + history_text
+            + "\n"
+            + action_prompt
         )
 
         response = self._strip_json_markers(self.backend.generate(full_prompt))
@@ -140,7 +151,7 @@ class UISimulator:
             return Action(type="wait", duration=500)
 
         target = None
-        if "target" in data and data["target"]:
+        if data.get("target"):
             target = ActionTarget(
                 id=data["target"].get("id"),
                 selector=data["target"].get("selector", ""),

@@ -88,13 +88,16 @@ class MockableToolContext:
     """
 
     def __init__(self, mocks: MockToolkit | None):
+        """Store the toolkit to activate while the context is entered."""
         self.mocks = mocks
         self._previous: MockToolkit | None = None
 
     def __enter__(self) -> "MockableToolContext":
+        """Install the mock toolkit, remembering the previous one."""
         self._previous = get_mock_toolkit()
         set_mock_toolkit(self.mocks)
         return self
 
     def __exit__(self, _exc_type: Any, _exc_val: Any, _exc_tb: Any) -> None:
+        """Restore the previously active mock toolkit."""
         set_mock_toolkit(self._previous)

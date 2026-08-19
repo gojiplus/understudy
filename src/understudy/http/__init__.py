@@ -29,9 +29,11 @@ class HTTPApp(AgentApp):
         headers: dict[str, str] | None = None,
         timeout: float = 60.0,
     ):
-        """
+        """Configure the HTTP client for a deployed agent.
+
         Args:
-            base_url: Base URL of the deployed agent (e.g., "http://localhost:8080").
+            base_url: Base URL of the deployed agent
+                (e.g., "http://localhost:8080").
             app_name: Name of the ADK application.
             user_id: User ID for the session.
             headers: Additional HTTP headers (e.g., for authentication).
@@ -47,7 +49,9 @@ class HTTPApp(AgentApp):
         self._current_agent: str | None = None
         self._agent_transfers: list[AgentTransfer] = []
 
-    def start(self, mocks=None) -> None:
+    # `mocks` is part of the AgentApp protocol; a remotely deployed agent
+    # cannot have mock tools installed, so it is accepted and ignored.
+    def start(self, mocks=None) -> None:  # noqa: ARG002
         """Initialize HTTP client and create a session."""
         try:
             import httpx
@@ -152,14 +156,13 @@ class HTTPApp(AgentApp):
 
         self._current_agent = current_agent
 
-        response = AgentResponse(
+        return AgentResponse(
             content=" ".join(agent_text_parts),
             tool_calls=tool_calls,
             terminal_state=terminal_state,
             agent_name=current_agent,
             agent_transfers=list(self._agent_transfers),
         )
-        return response
 
     def stop(self) -> None:
         """Clean up HTTP client."""
@@ -194,14 +197,16 @@ class AgentEngineApp(HTTPApp):
         credentials: Any = None,
         timeout: float = 60.0,
     ):
-        """
+        """Configure the client for an Agent Engine deployment.
+
         Args:
             project_id: Google Cloud project ID.
             location: Agent Engine location (e.g., "us-central1").
             resource_id: Agent resource ID.
             app_name: Application name.
             user_id: User ID for the session.
-            credentials: Google Cloud credentials. If None, uses default credentials.
+            credentials: Optional Google credentials object used for auth.
+                If None, uses default credentials.
             timeout: Request timeout in seconds.
         """
         base_url = (

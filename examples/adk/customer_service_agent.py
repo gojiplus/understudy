@@ -8,7 +8,7 @@ from google.adk import Agent
 from google.adk.tools import FunctionTool
 
 
-def lookup_order(order_id: str) -> dict:  # noqa: ARG001
+def lookup_order(order_id: str) -> dict:
     """Look up an order by its ID.
 
     Args:
@@ -17,10 +17,9 @@ def lookup_order(order_id: str) -> dict:  # noqa: ARG001
     Returns:
         Order details including items, status, and delivery date.
     """
-    ...
 
 
-def lookup_customer_orders(email: str) -> list[dict]:  # noqa: ARG001
+def lookup_customer_orders(email: str) -> list[dict]:
     """Look up all orders for a customer by email address.
 
     Args:
@@ -29,10 +28,9 @@ def lookup_customer_orders(email: str) -> list[dict]:  # noqa: ARG001
     Returns:
         List of order summaries for the customer.
     """
-    ...
 
 
-def get_return_policy(category: str) -> dict:  # noqa: ARG001
+def get_return_policy(category: str) -> dict:
     """Get the return policy for an item category.
 
     Args:
@@ -41,10 +39,9 @@ def get_return_policy(category: str) -> dict:  # noqa: ARG001
     Returns:
         Policy info including whether returns are allowed and conditions.
     """
-    ...
 
 
-def create_return(order_id: str, item_sku: str, reason: str) -> dict:  # noqa: ARG001
+def create_return(order_id: str, item_sku: str, reason: str) -> dict:
     """Create a return request for an item.
 
     Args:
@@ -55,10 +52,9 @@ def create_return(order_id: str, item_sku: str, reason: str) -> dict:  # noqa: A
     Returns:
         Return ID and shipping label URL.
     """
-    ...
 
 
-def escalate_to_human(reason: str) -> dict:  # noqa: ARG001
+def escalate_to_human(reason: str) -> dict:
     """Escalate the conversation to a human agent.
 
     Args:
@@ -67,7 +63,6 @@ def escalate_to_human(reason: str) -> dict:  # noqa: ARG001
     Returns:
         Escalation confirmation with ticket ID.
     """
-    ...
 
 
 customer_service_agent = Agent(

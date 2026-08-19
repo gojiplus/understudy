@@ -36,7 +36,8 @@ class LangGraphApp(AgentApp):
         input_key: str = "messages",
         config: dict[str, Any] | None = None,
     ):
-        """
+        """Wrap a compiled LangGraph graph.
+
         Args:
             graph: A LangGraph CompiledGraph instance.
             input_key: The key used for message input in the graph state.
@@ -54,7 +55,8 @@ class LangGraphApp(AgentApp):
             from langchain_core.messages import HumanMessage  # noqa: F401
         except ImportError as e:
             raise ImportError(
-                "langchain-core package required. Install with: pip install understudy[langgraph]"
+                "langchain-core package required. "
+                "Install with: pip install understudy[langgraph]"
             ) from e
 
         self.thread_id = str(uuid.uuid4())
@@ -67,7 +69,8 @@ class LangGraphApp(AgentApp):
             from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
         except ImportError as e:
             raise ImportError(
-                "langchain-core package required. Install with: pip install understudy[langgraph]"
+                "langchain-core package required. "
+                "Install with: pip install understudy[langgraph]"
             ) from e
 
         if self.thread_id is None:
@@ -90,8 +93,10 @@ class LangGraphApp(AgentApp):
         output_tokens = 0
         thinking_tokens = 0
 
-        for chunk in self.graph.stream(input_state, config=config, stream_mode="updates"):
-            for _node_name, updates in chunk.items():
+        for chunk in self.graph.stream(
+            input_state, config=config, stream_mode="updates"
+        ):
+            for updates in chunk.values():
                 messages = updates.get("messages", [])
                 if not isinstance(messages, list):
                     messages = [messages]
@@ -130,7 +135,10 @@ class LangGraphApp(AgentApp):
                             tool_name = getattr(msg, "name", None)
                             if tool_name:
                                 for call in reversed(tool_calls):
-                                    if call.tool_name == tool_name and call.result is None:
+                                    if (
+                                        call.tool_name == tool_name
+                                        and call.result is None
+                                    ):
                                         call.result = msg.content
                                         break
 
@@ -141,7 +149,9 @@ class LangGraphApp(AgentApp):
             if graph_state and hasattr(graph_state, "values"):
                 state_values = graph_state.values
                 if isinstance(state_values, dict):
-                    state_snapshot = {k: v for k, v in state_values.items() if k != "messages"}
+                    state_snapshot = {
+                        k: v for k, v in state_values.items() if k != "messages"
+                    }
 
             # detect if graph reached END node (no next steps)
             if graph_state and hasattr(graph_state, "next") and not graph_state.next:

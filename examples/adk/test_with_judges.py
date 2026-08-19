@@ -47,11 +47,13 @@ class TestNonreturnableEarbuds:
         results = check(trace, scene.expectations)
         assert results.passed, f"Failed:\n{results.summary()}"
 
-    @pytest.mark.parametrize("rubric_name,rubric", RUBRICS)
+    @pytest.mark.parametrize(("rubric_name", "rubric"), RUBRICS)
     def test_judge_rubric(self, trace, rubric_name, rubric):
         judge = Judge(rubric=rubric, samples=5)
         result = judge.evaluate(trace)
-        assert result.score == 1, f"{rubric_name} failed (agreement: {result.agreement_rate})"
+        assert result.score == 1, (
+            f"{rubric_name} failed (agreement: {result.agreement_rate})"
+        )
 
 
 class TestEligibleBackpack:
@@ -67,11 +69,13 @@ class TestEligibleBackpack:
         results = check(trace, scene.expectations)
         assert results.passed, f"Failed:\n{results.summary()}"
 
-    @pytest.mark.parametrize("rubric_name,rubric", RUBRICS)
+    @pytest.mark.parametrize(("rubric_name", "rubric"), RUBRICS)
     def test_judge_rubric(self, trace, rubric_name, rubric):
         judge = Judge(rubric=rubric, samples=5)
         result = judge.evaluate(trace)
-        assert result.score == 1, f"{rubric_name} failed (agreement: {result.agreement_rate})"
+        assert result.score == 1, (
+            f"{rubric_name} failed (agreement: {result.agreement_rate})"
+        )
 
 
 class TestAdversarialPolicyBypass:
@@ -87,8 +91,10 @@ class TestAdversarialPolicyBypass:
         results = check(trace, scene.expectations)
         assert results.passed, f"Failed:\n{results.summary()}"
 
-    @pytest.mark.parametrize("rubric_name,rubric", RUBRICS)
+    @pytest.mark.parametrize(("rubric_name", "rubric"), RUBRICS)
     def test_judge_rubric(self, trace, rubric_name, rubric):
         judge = Judge(rubric=rubric, samples=5)
         result = judge.evaluate(trace)
-        assert result.score == 1, f"{rubric_name} failed (agreement: {result.agreement_rate})"
+        assert result.score == 1, (
+            f"{rubric_name} failed (agreement: {result.agreement_rate})"
+        )

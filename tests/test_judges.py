@@ -159,7 +159,9 @@ class TestJudge:
     def test_judge_handles_yes_with_extra_text(self):
         mock_litellm = MagicMock()
         mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content="YES, definitely"))]
+        mock_response.choices = [
+            MagicMock(message=MagicMock(content="YES, definitely"))
+        ]
         mock_litellm.completion.return_value = mock_response
 
         with patch.dict("sys.modules", {"litellm": mock_litellm}):
@@ -249,7 +251,9 @@ class TestFailureAnalyzer:
         mock_response = MagicMock()
         mock_response.choices = [
             MagicMock(
-                message=MagicMock(content="The agent failed because it didn't look up the order.")
+                message=MagicMock(
+                    content="The agent failed because it didn't look up the order."
+                )
             )
         ]
         mock_litellm.completion.return_value = mock_response
@@ -258,7 +262,9 @@ class TestFailureAnalyzer:
             analyzer = FailureAnalyzer()
             trace = self._make_trace()
             result = analyzer.analyze(
-                trace, "Required tools: lookup_order", ["required_tool: lookup_order NOT called"]
+                trace,
+                "Required tools: lookup_order",
+                ["required_tool: lookup_order NOT called"],
             )
 
             assert "failed" in result.lower()
@@ -279,7 +285,9 @@ class TestFailureAnalyzer:
     def test_analyze_run_with_failures(self):
         mock_litellm = MagicMock()
         mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content="Root cause: missing tool"))]
+        mock_response.choices = [
+            MagicMock(message=MagicMock(content="Root cause: missing tool"))
+        ]
         mock_litellm.completion.return_value = mock_response
 
         with patch.dict("sys.modules", {"litellm": mock_litellm}):

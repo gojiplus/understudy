@@ -50,10 +50,10 @@ class TraceDiff:
         - A tool that was called is no longer called
         - Terminal state went from success to failure
         """
-        warnings = []
-
-        for tool in self.removed_tools:
-            warnings.append(f"Tool '{tool}' was called before but not after")
+        warnings = [
+            f"Tool '{tool}' was called before but not after"
+            for tool in self.removed_tools
+        ]
 
         if (
             self.terminal_state_changed
@@ -61,7 +61,8 @@ class TraceDiff:
             and self.trace2_terminal not in ("completed", "done", "success")
         ):
             warnings.append(
-                f"Terminal state regressed: {self.trace1_terminal} -> {self.trace2_terminal}"
+                f"Terminal state regressed: "
+                f"{self.trace1_terminal} -> {self.trace2_terminal}"
             )
 
         return warnings
@@ -77,23 +78,25 @@ class TraceDiff:
 
         if self.added_tools:
             lines.append(f"\nAdded tools ({len(self.added_tools)}):")
-            for tool in self.added_tools:
-                lines.append(f"  + {tool}")
+            lines.extend(f"  + {tool}" for tool in self.added_tools)
 
         if self.removed_tools:
             lines.append(f"\nRemoved tools ({len(self.removed_tools)}):")
-            for tool in self.removed_tools:
-                lines.append(f"  - {tool}")
+            lines.extend(f"  - {tool}" for tool in self.removed_tools)
 
         if self.changed_calls:
             lines.append(f"\nChanged calls ({len(self.changed_calls)}):")
             for diff in self.changed_calls:
                 lines.append(f"  ~ {diff.tool_name}")
-                for key, (old, new) in diff.arg_changes.items():
-                    lines.append(f"      {key}: {old} -> {new}")
+                lines.extend(
+                    f"      {key}: {old} -> {new}"
+                    for key, (old, new) in diff.arg_changes.items()
+                )
 
         if self.terminal_state_changed:
-            lines.append(f"\nTerminal state: {self.trace1_terminal} -> {self.trace2_terminal}")
+            lines.append(
+                f"\nTerminal state: {self.trace1_terminal} -> {self.trace2_terminal}"
+            )
 
         if self.turn_count_diff != 0:
             direction = "more" if self.turn_count_diff > 0 else "fewer"
@@ -102,8 +105,7 @@ class TraceDiff:
         warnings = self.regression_warnings
         if warnings:
             lines.append("\nPotential regressions:")
-            for w in warnings:
-                lines.append(f"  ! {w}")
+            lines.extend(f"  ! {w}" for w in warnings)
 
         return "\n".join(lines)
 
@@ -168,7 +170,9 @@ def diff_traces(trace1: Trace, trace2: Trace) -> TraceDiff:
     return result
 
 
-def _diff_arguments(args1: dict[str, Any], args2: dict[str, Any]) -> dict[str, tuple[Any, Any]]:
+def _diff_arguments(
+    args1: dict[str, Any], args2: dict[str, Any]
+) -> dict[str, tuple[Any, Any]]:
     """Find differences between two argument dicts."""
     changes = {}
 
@@ -184,6 +188,10 @@ def _diff_arguments(args1: dict[str, Any], args2: dict[str, Any]) -> dict[str, t
 
 def diff_tool_sequences(seq1: list[str], seq2: list[str]) -> dict[str, Any]:
     """Compare two tool call sequences.
+
+    Args:
+        seq1: Tool names in call order from the first trace.
+        seq2: Tool names in call order from the second trace.
 
     Returns:
         Dict with sequence comparison information.

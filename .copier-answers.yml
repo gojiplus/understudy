@@ -1,0 +1,12 @@
+# Managed by copier — records template version for `copier update`. Do not edit.
+_commit: v1.0.1
+_src_path: gh:gojiplus/py-canon
+author_email: gsood07@gmail.com
+author_name: Gaurav Sood
+coverage_floor: 75
+default_branch: main
+description: Simulation and trace-based evaluation for agentic systems
+needs_cli: true
+org: gojiplus
+package_name: understudy
+project_name: understudy

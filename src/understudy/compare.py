@@ -18,14 +18,17 @@ class SceneComparison:
 
     @property
     def before_pass_rate(self) -> float:
+        """Fraction of before-group runs that passed (0.0 if no runs)."""
         return self.before_passed / self.before_total if self.before_total else 0.0
 
     @property
     def after_pass_rate(self) -> float:
+        """Fraction of after-group runs that passed (0.0 if no runs)."""
         return self.after_passed / self.after_total if self.after_total else 0.0
 
     @property
     def pass_rate_delta(self) -> float:
+        """Change in pass rate from the before group to the after group."""
         return self.after_pass_rate - self.before_pass_rate
 
 
@@ -113,7 +116,9 @@ def compare_runs(
     )
 
 
-def _filter_by_tag(runs: list[dict[str, Any]], tag: str, value: str) -> list[dict[str, Any]]:
+def _filter_by_tag(
+    runs: list[dict[str, Any]], tag: str, value: str
+) -> list[dict[str, Any]]:
     """Filter runs by tag key/value."""
     return [r for r in runs if r.get("metadata", {}).get("tags", {}).get(tag) == value]
 

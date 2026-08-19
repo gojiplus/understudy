@@ -16,6 +16,7 @@ class AgenticMetricResult:
     detail: str = ""
 
     def __repr__(self) -> str:
+        """Return the metric name with its status or value."""
         if self.passed is not None:
             status = "passed" if self.passed else "failed"
             return f"AgenticMetricResult({self.name}: {status})"

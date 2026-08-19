@@ -50,7 +50,8 @@ def create_mocks() -> MockToolkit:
             "        return requests.get(url).json()\n"
         ),
         "src/models.py": (
-            "from dataclasses import dataclass\n\n@dataclass\nclass User:\n    name: str\n"
+            "from dataclasses import dataclass\n\n@dataclass\n"
+            "class User:\n    name: str\n"
         ),
         "data/sales.csv": (
             "date,product,quantity,price\n"
@@ -90,7 +91,9 @@ def create_mocks() -> MockToolkit:
             if pattern in content:
                 for i, line in enumerate(content.split("\n"), 1):
                     if pattern in line:
-                        results.append({"file": path, "line": i, "content": line.strip()})
+                        results.append(
+                            {"file": path, "line": i, "content": line.strip()}
+                        )
         return results
 
     @toolkit.handle("analyze_code")
@@ -99,7 +102,10 @@ def create_mocks() -> MockToolkit:
         return {
             "issues": [
                 {"type": "style", "message": "Use 'is None' instead of '== None'"},
-                {"type": "performance", "message": "Use enumerate() instead of range(len())"},
+                {
+                    "type": "performance",
+                    "message": "Use enumerate() instead of range(len())",
+                },
                 {"type": "best_practice", "message": "Avoid imports inside functions"},
             ],
             "score": 6.5,

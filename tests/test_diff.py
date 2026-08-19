@@ -10,7 +10,10 @@ class TestDiffTraces:
         tool_calls: list[tuple[str, dict]] | None = None,
         terminal_state: str | None = "completed",
     ) -> Trace:
-        calls = [ToolCall(tool_name=name, arguments=args) for name, args in (tool_calls or [])]
+        calls = [
+            ToolCall(tool_name=name, arguments=args)
+            for name, args in (tool_calls or [])
+        ]
         return Trace(
             scene_id=scene_id,
             turns=[
@@ -33,7 +36,9 @@ class TestDiffTraces:
 
     def test_added_tool(self):
         trace1 = self._make_trace(tool_calls=[("lookup_order", {})])
-        trace2 = self._make_trace(tool_calls=[("lookup_order", {}), ("create_return", {})])
+        trace2 = self._make_trace(
+            tool_calls=[("lookup_order", {}), ("create_return", {})]
+        )
 
         diff = diff_traces(trace1, trace2)
 
@@ -42,7 +47,9 @@ class TestDiffTraces:
         assert diff.removed_tools == []
 
     def test_removed_tool(self):
-        trace1 = self._make_trace(tool_calls=[("lookup_order", {}), ("create_return", {})])
+        trace1 = self._make_trace(
+            tool_calls=[("lookup_order", {}), ("create_return", {})]
+        )
         trace2 = self._make_trace(tool_calls=[("lookup_order", {})])
 
         diff = diff_traces(trace1, trace2)
@@ -74,7 +81,9 @@ class TestDiffTraces:
         assert diff.trace2_terminal == "failed"
 
     def test_regression_warnings_removed_tool(self):
-        trace1 = self._make_trace(tool_calls=[("lookup_order", {}), ("create_return", {})])
+        trace1 = self._make_trace(
+            tool_calls=[("lookup_order", {}), ("create_return", {})]
+        )
         trace2 = self._make_trace(tool_calls=[("lookup_order", {})])
 
         diff = diff_traces(trace1, trace2)

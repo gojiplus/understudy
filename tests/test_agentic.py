@@ -110,7 +110,10 @@ class TestAgenticTrace:
                     step_number=4,
                     step_type="act",
                     action="write_file",
-                    action_args={"path": "test_main.py", "content": "def test_foo(): ..."},
+                    action_args={
+                        "path": "test_main.py",
+                        "content": "def test_foo(): ...",
+                    },
                     observation="File written",
                     tokens_used=150,
                 ),
@@ -328,8 +331,12 @@ class TestCheckAgentic:
         task = Task(description="Test", goal="Goal")
         if steps is None:
             steps = [
-                Step(step_number=1, step_type="act", action="read_file", tokens_used=50),
-                Step(step_number=2, step_type="act", action="write_file", tokens_used=50),
+                Step(
+                    step_number=1, step_type="act", action="read_file", tokens_used=50
+                ),
+                Step(
+                    step_number=2, step_type="act", action="write_file", tokens_used=50
+                ),
             ]
         return AgenticTrace(
             scene_id="check_test",
@@ -759,7 +766,9 @@ class TestArtifact:
             steps=[],
             outcome="success",
             artifacts=[
-                Artifact(name="result.json", artifact_type="json", content={"key": "value"}),
+                Artifact(
+                    name="result.json", artifact_type="json", content={"key": "value"}
+                ),
             ],
         )
         assert len(trace.artifacts) == 1

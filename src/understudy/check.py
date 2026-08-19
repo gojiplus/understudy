@@ -19,22 +19,29 @@ class CheckResult:
 
     @property
     def passed(self) -> bool:
+        """True when all checks and all pass/fail metrics passed."""
         checks_passed = all(c.passed for c in self.checks)
-        metrics_passed = all(m.passed for m in self.metrics.values() if m.passed is not None)
+        metrics_passed = all(
+            m.passed for m in self.metrics.values() if m.passed is not None
+        )
         return checks_passed and metrics_passed
 
     @property
     def failed_checks(self) -> list["CheckItem"]:
+        """Return only the checks that did not pass."""
         return [c for c in self.checks if not c.passed]
 
     @property
     def failed_metrics(self) -> list[MetricResult]:
+        """Return metrics that explicitly failed (passed is False)."""
         return [m for m in self.metrics.values() if m.passed is False]
 
     def metric(self, name: str) -> MetricResult | None:
+        """Look up a metric result by name, or None if absent."""
         return self.metrics.get(name)
 
     def summary(self) -> str:
+        """Render a line-per-check text summary including metrics."""
         lines = []
         for c in self.checks:
             mark = "✓" if c.passed else "✗"
@@ -48,6 +55,7 @@ class CheckResult:
         return "\n".join(lines)
 
     def __repr__(self) -> str:
+        """Return a compact pass/fail and metric count summary."""
         n_checks = len(self.checks)
         n_pass = sum(1 for c in self.checks if c.passed)
         n_metrics = len(self.metrics)
@@ -102,22 +110,24 @@ def check(trace: Trace, expectations: Expectations) -> CheckResult:
     # required agents
     invoked_agents = set(trace.agents_invoked())
     for agent in expectations.required_agents:
+        status = "invoked" if agent in invoked_agents else "NOT invoked"
         result.checks.append(
             CheckItem(
                 label="required_agent",
                 passed=agent in invoked_agents,
-                detail=f"{agent} {'invoked' if agent in invoked_agents else 'NOT invoked'}",
+                detail=f"{agent} {status}",
             )
         )
 
     # forbidden agents
     for agent in expectations.forbidden_agents:
         was_invoked = agent in invoked_agents
+        status = "INVOKED (violation)" if was_invoked else "not invoked"
         result.checks.append(
             CheckItem(
                 label="forbidden_agent",
                 passed=not was_invoked,
-                detail=f"{agent} {'INVOKED (violation)' if was_invoked else 'not invoked'}",
+                detail=f"{agent} {status}",
             )
         )
 
@@ -148,7 +158,9 @@ def check(trace: Trace, expectations: Expectations) -> CheckResult:
 
     # compute metrics
     if expectations.metrics:
-        result.metrics = MetricRegistry.compute_all(expectations.metrics, trace, expectations)
+        result.metrics = MetricRegistry.compute_all(
+            expectations.metrics, trace, expectations
+        )
 
     return result
 
@@ -193,7 +205,10 @@ def evaluate(
             judge_result = judge.evaluate(trace)
             result.metrics[f"judge_{name}"] = MetricResult(
                 name=f"judge_{name}",
-                value={"score": judge_result.score, "agreement_rate": judge_result.agreement_rate},
+                value={
+                    "score": judge_result.score,
+                    "agreement_rate": judge_result.agreement_rate,
+                },
                 passed=judge_result.score == 1,
                 detail=judge_result.reasoning or "",
             )
@@ -211,6 +226,7 @@ class EvaluationResult:
 
     @property
     def passed(self) -> bool:
+        """True when evaluation ran without error and all checks passed."""
         return self.error is None and self.check_result.passed
 
 
@@ -247,7 +263,9 @@ class _EvaluationExecutor(BatchExecutor[_EvaluationTask, EvaluationResult]):
                 judge_model=self.judge_model,
             )
             if self.result_storage:
-                self.result_storage.save(trace_id=item.trace_id, check_result=check_result)
+                self.result_storage.save(
+                    trace_id=item.trace_id, check_result=check_result
+                )
             return EvaluationResult(trace_id=item.trace_id, check_result=check_result)
         except Exception as e:
             import traceback
@@ -271,7 +289,8 @@ def evaluate_batch(
 
     Args:
         traces: List of Trace objects, or path to trace file/directory.
-        expectations: Expectations to evaluate against (if None, loads from trace metadata).
+        expectations: Expectations to evaluate against (if None, loads from
+            trace metadata).
         output: Optional path to save evaluation results.
         judge_model: Optional LLM model for judge evaluations.
         metrics: Override metrics to compute.
@@ -291,13 +310,17 @@ def evaluate_batch(
             data = storage.load(trace_id)
             trace = data["trace"]
             scene = data["scene"]
-            exp = expectations if expectations else scene.expectations
-            tasks.append(_EvaluationTask(trace_id=trace_id, trace=trace, expectations=exp))
+            exp = expectations or scene.expectations
+            tasks.append(
+                _EvaluationTask(trace_id=trace_id, trace=trace, expectations=exp)
+            )
     else:
         for i, trace in enumerate(traces):
             trace_id = f"trace_{i}"
-            exp = expectations if expectations else Expectations()
-            tasks.append(_EvaluationTask(trace_id=trace_id, trace=trace, expectations=exp))
+            exp = expectations or Expectations()
+            tasks.append(
+                _EvaluationTask(trace_id=trace_id, trace=trace, expectations=exp)
+            )
 
     result_storage = None
     if output:

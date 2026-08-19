@@ -45,6 +45,7 @@ class JudgeResult:
 
     @property
     def unanimous(self) -> bool:
+        """True when every judge sample agreed on the verdict."""
         return self.agreement_rate == 1.0
 
 
@@ -190,6 +191,7 @@ class FailureAnalyzer:
     """
 
     def __init__(self, model: str = "gpt-4o"):
+        """Set the LLM model used to analyze failures."""
         self.model = model
 
     def analyze(
@@ -230,7 +232,9 @@ class FailureAnalyzer:
         metadata = run_data.get("metadata", {})
 
         failed_checks = [
-            c.get("label", "unknown") for c in check.get("checks", []) if not c.get("passed")
+            c.get("label", "unknown")
+            for c in check.get("checks", [])
+            if not c.get("passed")
         ]
 
         if not failed_checks or not trace:
@@ -238,7 +242,9 @@ class FailureAnalyzer:
                 run_id=metadata.get("run_id", "unknown"),
                 scene_id=metadata.get("scene_id", "unknown"),
                 failed_checks=failed_checks,
-                analysis="No trace available for analysis." if not trace else "No failures.",
+                analysis="No trace available for analysis."
+                if not trace
+                else "No failures.",
             )
 
         expectations_text = ""

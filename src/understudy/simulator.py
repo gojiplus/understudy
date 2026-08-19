@@ -6,7 +6,9 @@ from typing import Protocol
 class SimulatorBackend(Protocol):
     """Protocol for LLM backends that generate user turns."""
 
-    def generate(self, prompt: str) -> str: ...
+    def generate(self, prompt: str) -> str:
+        """Return the model's raw text response for the prompt."""
+        ...
 
 
 SIMULATOR_SYSTEM_PROMPT = """\
@@ -42,6 +44,7 @@ class Simulator:
         conversation_plan: str,
         persona_prompt: str,
     ):
+        """Build the system prompt from the persona and conversation plan."""
         self.backend = backend
         self.system_prompt = SIMULATOR_SYSTEM_PROMPT.format(
             persona=persona_prompt,
@@ -53,10 +56,6 @@ class Simulator:
 
         Returns None if the simulator signals the conversation is finished.
         """
-        messages = [{"role": "system", "content": self.system_prompt}]
-        for turn in history:
-            messages.append(turn)
-
         # build a single prompt for simple backends
         prompt = self.system_prompt + "\n\nCONVERSATION SO FAR:\n"
         for turn in history:

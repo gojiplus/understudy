@@ -1,5 +1,6 @@
 """Friendly validation error messages for understudy."""
 
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ class SceneValidationError(Exception):
     """Raised when a scene file fails validation with a friendly message."""
 
     def __init__(self, message: str, file_path: Path | None = None):
+        """Record the friendly message and the offending file, if known."""
         self.message = message
         self.file_path = file_path
         super().__init__(message)
@@ -17,8 +19,10 @@ class SceneValidationError(Exception):
 
 FIELD_EXAMPLES: dict[str, str] = {
     "starting_prompt": '"I need help with my order"',
-    "conversation_plan": '"Goal: Return item from order ORD-123.\\nProvide order ID when asked."',
-    "persona": '"cooperative"  # or: frustrated_but_cooperative, adversarial, vague, impatient',
+    "conversation_plan": '"Goal: Return item from order ORD-123.\\n'
+    'Provide order ID when asked."',
+    "persona": '"cooperative"  # or: frustrated_but_cooperative, '
+    "adversarial, vague, impatient",
     "id": '"my_scene_id"',
     "description": '"Customer wants to return an item"',
     "max_turns": "20",
@@ -27,20 +31,24 @@ FIELD_EXAMPLES: dict[str, str] = {
 }
 
 FIELD_HELP: dict[str, str] = {
-    "starting_prompt": "The first message the simulated user sends to start the conversation",
-    "conversation_plan": "Instructions for the simulator about what the user wants to accomplish",
-    "persona": "How the simulated user should behave (preset name or custom description)",
+    "starting_prompt": "The first message the simulated user sends to start "
+    "the conversation",
+    "conversation_plan": "Instructions for the simulator about what the user "
+    "wants to accomplish",
+    "persona": "How the simulated user should behave (preset name or custom "
+    "description)",
     "id": "Unique identifier for this scene",
     "max_turns": "Maximum number of conversation turns before stopping",
-    "context": "World state data (customer info, orders, policies) available to mock tools",
-    "expectations": "What should happen: required_tools, forbidden_tools, expected_resolution",
+    "context": "World state data (customer info, orders, policies) available "
+    "to mock tools",
+    "expectations": "What should happen: required_tools, forbidden_tools, "
+    "expected_resolution",
 }
 
 
 def format_pydantic_error(
     error: ValidationError,
     file_path: Path | None = None,
-    data: dict[str, Any] | None = None,
 ) -> str:
     """Convert a Pydantic ValidationError into a friendly message."""
     lines = []
@@ -85,8 +93,9 @@ def format_pydantic_error(
     if examples_to_show:
         lines.append("")
         lines.append("Example:")
-        for field in examples_to_show[:3]:
-            lines.append(f"  {field}: {FIELD_EXAMPLES[field]}")
+        lines.extend(
+            f"  {field}: {FIELD_EXAMPLES[field]}" for field in examples_to_show[:3]
+        )
 
     return "\n".join(lines)
 
@@ -96,51 +105,36 @@ def validate_scene_data(data: dict[str, Any], file_path: Path | None = None) -> 
 
     Call this before creating a Scene to get better error messages.
     """
-    warnings = []
+    problems = []
 
     if "mocks" in data:
-        warnings.append("Field 'mocks' is not used in scene files (mocks are provided at runtime)")
+        problems.append(
+            "Field 'mocks' is not used in scene files (mocks are provided at runtime)"
+        )
 
-    context = data.get("context", {})
-    expectations = data.get("expectations", {})
-
-    if context and expectations:
-        context_tools = set()
-        if "orders" in context:
-            context_tools.add("lookup_order")
-        if "policy" in context:
-            context_tools.add("get_return_policy")
-
-        required = set(expectations.get("required_tools", []))
-        for tool in required:
-            if tool.startswith("create_") or tool.startswith("issue_"):
-                continue
-            if context_tools and tool not in context_tools:
-                pass
-
-    if warnings:
-        import sys
-
-        for w in warnings:
-            print(f"Warning: {w}", file=sys.stderr)
+    for w in problems:
+        message = f"{file_path}: {w}" if file_path else w
+        warnings.warn(message, UserWarning, stacklevel=2)
 
 
-def check_common_mistakes(data: dict[str, Any], file_path: Path | None = None) -> list[str]:
+def check_common_mistakes(data: dict[str, Any]) -> list[str]:
     """Check for common scene definition mistakes. Returns list of warnings."""
-    warnings = []
+    problems = []
 
     if "prompt" in data and "starting_prompt" not in data:
-        warnings.append(
-            "Found 'prompt' but expected 'starting_prompt'. Did you mean 'starting_prompt'?"
+        problems.append(
+            "Found 'prompt' but expected 'starting_prompt'. "
+            "Did you mean 'starting_prompt'?"
         )
 
     if "plan" in data and "conversation_plan" not in data:
-        warnings.append(
-            "Found 'plan' but expected 'conversation_plan'. Did you mean 'conversation_plan'?"
+        problems.append(
+            "Found 'plan' but expected 'conversation_plan'. "
+            "Did you mean 'conversation_plan'?"
         )
 
     if "expected_tools" in data and "expectations" not in data:
-        warnings.append(
+        problems.append(
             "Found 'expected_tools' at root level. "
             "Did you mean to put it under 'expectations.required_tools'?"
         )
@@ -155,7 +149,7 @@ def check_common_mistakes(data: dict[str, Any], file_path: Path | None = None) -
             "impatient",
         }
         if persona not in valid_presets:
-            warnings.append(
+            problems.append(
                 f"Unknown persona preset '{persona}'. "
                 f"Valid presets: {', '.join(sorted(valid_presets))}. "
                 f"Use a dict for custom personas: persona:\\n  description: '...'"
@@ -165,9 +159,9 @@ def check_common_mistakes(data: dict[str, Any], file_path: Path | None = None) -
     if isinstance(expectations, dict):
         trajectory_mode = expectations.get("trajectory_match_mode")
         if trajectory_mode and trajectory_mode not in ("exact", "subset", "ordered"):
-            warnings.append(
+            problems.append(
                 f"Unknown trajectory_match_mode '{trajectory_mode}'. "
                 f"Valid modes: exact, subset, ordered"
             )
 
-    return warnings
+    return problems

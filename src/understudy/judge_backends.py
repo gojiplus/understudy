@@ -42,6 +42,7 @@ class BaseJudgeBackend(ABC):
         temperature: float = 1.0,
         max_tokens: int = 10,
     ):
+        """Store the model name and sampling settings shared by all backends."""
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -49,7 +50,6 @@ class BaseJudgeBackend(ABC):
     @abstractmethod
     def evaluate(self, prompt: str) -> str:
         """Evaluate a prompt and return the response."""
-        pass
 
     async def evaluate_async(self, prompt: str) -> str:
         """Async evaluation - default wraps sync method."""
@@ -75,6 +75,7 @@ class LiteLLMBackend(BaseJudgeBackend):
         temperature: float = 1.0,
         max_tokens: int = 10,
     ):
+        """Set up the backend; the litellm import is deferred until first use."""
         super().__init__(model=model, temperature=temperature, max_tokens=max_tokens)
         self._litellm = None
 
@@ -86,7 +87,8 @@ class LiteLLMBackend(BaseJudgeBackend):
                 self._litellm = litellm
             except ImportError as e:
                 raise ImportError(
-                    "litellm package required for LiteLLMBackend. Install with: pip install litellm"
+                    "litellm package required for LiteLLMBackend. "
+                    "Install with: pip install litellm"
                 ) from e
         return self._litellm
 
@@ -132,6 +134,7 @@ class CallbackBackend(BaseJudgeBackend):
         callback,
         async_callback=None,
     ):
+        """Wrap a sync callback (and optional async callback) as a backend."""
         super().__init__()
         self._callback = callback
         self._async_callback = async_callback

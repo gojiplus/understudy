@@ -1,5 +1,6 @@
 """Core data models for understudy."""
 
+import warnings
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
@@ -35,7 +36,8 @@ PERSONA_DESCRIPTIONS: dict[PersonaPreset, dict] = {
         ],
     },
     PersonaPreset.FRUSTRATED_BUT_COOPERATIVE: {
-        "description": "Mildly frustrated but ultimately cooperative when asked clear questions.",
+        "description": "Mildly frustrated but ultimately cooperative when asked "
+        "clear questions.",
         "behaviors": [
             "Expresses mild frustration at the situation",
             "Pushes back once on denials before accepting",
@@ -92,6 +94,7 @@ class Persona(BaseModel):
 
     @classmethod
     def from_preset(cls, preset: PersonaPreset | str) -> "Persona":
+        """Build a Persona from a preset enum value or its string name."""
         if isinstance(preset, str):
             preset = PersonaPreset(preset)
         data = PERSONA_DESCRIPTIONS[preset]
@@ -102,14 +105,15 @@ class Persona(BaseModel):
         lines = [f"User persona: {self.description}"]
         if self.behaviors:
             lines.append("Behaviors:")
-            for b in self.behaviors:
-                lines.append(f"  - {b}")
+            lines.extend(f"  - {b}" for b in self.behaviors)
         return "\n".join(lines)
 
 
 # set presets as class attributes
 Persona.COOPERATIVE = Persona.from_preset(PersonaPreset.COOPERATIVE)
-Persona.FRUSTRATED_BUT_COOPERATIVE = Persona.from_preset(PersonaPreset.FRUSTRATED_BUT_COOPERATIVE)
+Persona.FRUSTRATED_BUT_COOPERATIVE = Persona.from_preset(
+    PersonaPreset.FRUSTRATED_BUT_COOPERATIVE
+)
 Persona.ADVERSARIAL = Persona.from_preset(PersonaPreset.ADVERSARIAL)
 Persona.VAGUE = Persona.from_preset(PersonaPreset.VAGUE)
 Persona.IMPATIENT = Persona.from_preset(PersonaPreset.IMPATIENT)
@@ -151,15 +155,21 @@ class Scene(BaseModel):
     def from_file(cls, path: str | Path) -> "Scene":
         """Load a scene from a YAML or JSON file.
 
+        Args:
+            path: Path to the scene file (.yaml, .yml, or .json).
+
+        Returns:
+            The parsed Scene.
+
         Raises:
-            SceneValidationError: If the scene file has validation errors.
+            SceneValidationError: If the scene file has validation errors or
+                the YAML/JSON is malformed.
             FileNotFoundError: If the file doesn't exist.
-            yaml.YAMLError: If the YAML/JSON is malformed.
         """
         path = Path(path)
 
         try:
-            with open(path) as f:
+            with path.open() as f:
                 if path.suffix in (".yaml", ".yml"):
                     data = yaml.safe_load(f)
                 else:
@@ -176,12 +186,8 @@ class Scene(BaseModel):
         if data is None:
             raise SceneValidationError(f"Scene file is empty: {path}", file_path=path)
 
-        warnings = check_common_mistakes(data, file_path=path)
-        if warnings:
-            import sys
-
-            for w in warnings:
-                print(f"Warning: {w}", file=sys.stderr)
+        for mistake in check_common_mistakes(data):
+            warnings.warn(f"{path}: {mistake}", UserWarning, stacklevel=2)
 
         validate_scene_data(data, file_path=path)
 
@@ -189,7 +195,7 @@ class Scene(BaseModel):
             return cls._from_dict(data)
         except ValidationError as e:
             raise SceneValidationError(
-                format_pydantic_error(e, file_path=path, data=data), file_path=path
+                format_pydantic_error(e, file_path=path), file_path=path
             ) from e
 
     @classmethod

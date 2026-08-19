@@ -28,7 +28,9 @@ class ReplayResult:
     @property
     def match_rate(self) -> float:
         """Fraction of turns that matched."""
-        return self.matched_responses / self.total_turns if self.total_turns > 0 else 0.0
+        return (
+            self.matched_responses / self.total_turns if self.total_turns > 0 else 0.0
+        )
 
     def summary(self) -> str:
         """Generate a human-readable summary."""
@@ -42,8 +44,7 @@ class ReplayResult:
 
         if self.errors:
             lines.append("\nErrors:")
-            for err in self.errors:
-                lines.append(f"  - {err}")
+            lines.extend(f"  - {err}" for err in self.errors)
 
         return "\n".join(lines)
 
@@ -90,7 +91,9 @@ def replay(
                         new_tool_calls.append(tc)
                     elif isinstance(tc, dict):
                         new_tool_calls.append(
-                            ToolCall(tool_name=tc["name"], arguments=tc.get("arguments", {}))
+                            ToolCall(
+                                tool_name=tc["name"], arguments=tc.get("arguments", {})
+                            )
                         )
 
                 new_turn = Turn(
@@ -136,7 +139,7 @@ def replay(
         matched_responses=matched,
         total_turns=len(user_messages),
         diverged_at_turn=diverged_at,
-        errors=errors if errors else None,
+        errors=errors or None,
     )
 
 
@@ -168,7 +171,7 @@ def load_trace(path: str | Path) -> Trace:
     import json
 
     path = Path(path)
-    with open(path) as f:
+    with path.open() as f:
         data = json.load(f)
 
     if "trace" in data:
