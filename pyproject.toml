@@ -82,6 +82,11 @@ convention = "google"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+minversion = "6"
+log_level = "INFO"
+xfail_strict = true
+filterwarnings = ["error"]
+addopts = ["--strict-config", "--strict-markers", "-ra"]
 
 [tool.pyright]
 include = ["src"]
@@ -111,6 +116,11 @@ test = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=4.0",
+    # starlette's TestClient (reached through fastapi.testclient) warns that
+    # driving it with httpx is deprecated and names httpx2 as the replacement.
+    # Under filterwarnings = ["error"] that notice fails collection of
+    # tests/test_server.py outright.
+    "httpx2>=2.12",
 ]
 dev = [
     "pytest>=8.0",
