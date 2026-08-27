@@ -82,6 +82,11 @@ convention = "google"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+minversion = "6"
+log_level = "INFO"
+xfail_strict = true
+filterwarnings = ["error"]
+addopts = ["--strict-config", "--strict-markers", "-ra"]
 
 [tool.pyright]
 include = ["src"]
