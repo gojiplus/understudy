@@ -116,6 +116,11 @@ test = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=4.0",
+    # starlette's TestClient (reached through fastapi.testclient) warns that
+    # driving it with httpx is deprecated and names httpx2 as the replacement.
+    # Under filterwarnings = ["error"] that notice fails collection of
+    # tests/test_server.py outright.
+    "httpx2>=2.12",
 ]
 dev = [
     "pytest>=8.0",

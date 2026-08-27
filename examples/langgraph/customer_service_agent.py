@@ -9,9 +9,11 @@ Requires: pip install understudy[langgraph]
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from langchain_core.runnables import Runnable
 from langchain_core.tools import tool
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
 from understudy.langgraph.tools import mockable_tool
@@ -47,6 +49,10 @@ def lookup_order(order_id: str) -> dict:
 
     Returns:
         Order details including items, status, and delivery date.
+
+    Raises:
+        NotImplementedError: Always. These tools stand in for a real
+            backend, so understudy's mocks supply the responses.
     """
     raise NotImplementedError("Real implementation not available - use mocks")
 
@@ -61,6 +67,10 @@ def lookup_customer_orders(email: str) -> list[dict]:
 
     Returns:
         List of order summaries for the customer.
+
+    Raises:
+        NotImplementedError: Always. These tools stand in for a real
+            backend, so understudy's mocks supply the responses.
     """
     raise NotImplementedError("Real implementation not available - use mocks")
 
@@ -75,6 +85,10 @@ def get_return_policy(category: str) -> dict:
 
     Returns:
         Policy info including whether returns are allowed and conditions.
+
+    Raises:
+        NotImplementedError: Always. These tools stand in for a real
+            backend, so understudy's mocks supply the responses.
     """
     raise NotImplementedError("Real implementation not available - use mocks")
 
@@ -91,6 +105,10 @@ def create_return(order_id: str, item_sku: str, reason: str) -> dict:
 
     Returns:
         Return ID and shipping label URL.
+
+    Raises:
+        NotImplementedError: Always. These tools stand in for a real
+            backend, so understudy's mocks supply the responses.
     """
     raise NotImplementedError("Real implementation not available - use mocks")
 
@@ -105,6 +123,10 @@ def escalate_to_human(reason: str) -> dict:
 
     Returns:
         Escalation confirmation with ticket ID.
+
+    Raises:
+        NotImplementedError: Always. These tools stand in for a real
+            backend, so understudy's mocks supply the responses.
     """
     raise NotImplementedError("Real implementation not available - use mocks")
 
@@ -118,7 +140,7 @@ tools = [
 ]
 
 
-def create_customer_service_agent(model):
+def create_customer_service_agent(model: Runnable) -> CompiledStateGraph:
     """Create the LangGraph customer service agent.
 
     Args:
