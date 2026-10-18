@@ -1,12 +1,13 @@
 """Isolated single-turn execution, state fixtures, and checkpoint capture."""
 
+import json
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .mocks import MockToolkit
 from .runner import AgentApp, AgentResponse
@@ -51,6 +52,8 @@ class StateFixture(BaseModel):
 class Checkpoint(BaseModel):
     """Versioned adapter state captured at a completed turn boundary."""
 
+    model_config = ConfigDict(validate_assignment=True)
+
     schema_version: Literal[1] = 1
     adapter: str
     framework_version: str
@@ -60,6 +63,31 @@ class Checkpoint(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     history: list[Turn] = Field(default_factory=list)
     tool_state: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("state", "tool_state", "payload")
+    @classmethod
+    def portable_metadata(cls, value: dict[str, Any]) -> dict[str, Any]:
+        """Reject metadata that cannot round-trip through portable JSON."""
+        try:
+            if json.loads(json.dumps(value, allow_nan=False)) == value:
+                return value
+        except (TypeError, ValueError):
+            pass
+        raise ValueError(
+            "Checkpoint state, tool_state, and payload "
+            "must contain JSON-compatible values"
+        )
+
+    @field_validator("history")
+    @classmethod
+    def portable_history(cls, history: list[Turn]) -> list[Turn]:
+        """Reject nonportable tool observations in the recorded history."""
+        for turn in history:
+            for call in turn.tool_calls:
+                cls.portable_metadata(
+                    {"arguments": call.arguments, "result": call.result}
+                )
+        return history
 
     def save(self, path: str | Path) -> None:
         """Write a portable checkpoint as JSON."""

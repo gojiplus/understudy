@@ -7,40 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-17
+
 ### Added
-- Isolated next-turn tests with synthetic state/history, native completed-turn
-  checkpoints, state patches, prefix replay, and fresh app/mock factories.
-- ADK app-wide tool interception and native nested invocation paths; LangGraph
-  checkpoint forks and nested graph tracing; a LangChain create_agent adapter.
-- `turn_runner` pytest fixture, `run-turn` and `replay-until` commands, and report
-  details for next-turn boundaries, state changes, and agent invocations.
+
+- Next-turn tests with synthetic state/history, completed-turn checkpoints,
+  state patches, prefix replay, and fresh app/mock factories.
+- ADK app plugins for tool interception and nested invocation tracing;
+  LangGraph checkpoint forks; a native LangChain `create_agent` adapter.
+- `turn_runner` pytest fixture, `run-turn` and `replay-until` commands, and
+  reports showing starting boundaries, state changes, and agent invocations.
+- Offline benchmarks for adapter overhead and checkpoint capture, restore, and
+  size with single and nested graphs.
 
 ### Changed
-- LangGraph mock context is isolated per execution. Parallel suites and batches
-  require app factories. Graph completion no longer ends a conversation.
-- Custom agentic adapters must intercept mocks before action execution; the runner
-  no longer changes observations after a real action has run.
-- Unsupported state, interception, or observation requests fail explicitly.
 
+- Parallel suites and batches require app factories and create separate mock
+  state for each run. LangGraph mock context is isolated per execution.
+- Custom adapters declare capabilities explicitly. Unsupported state,
+  interception, and observation requests raise errors.
+- Autonomous adapters accepting mocks must intercept tools before execution;
+  the runner no longer replaces observations after an action has run.
+- Graph completion ends a turn, rather than the entire conversation.
+- Native integrations require ADK 2.11+, LangGraph 1.2.14+,
+  langchain-core 1.6.9+, and LangChain 1.4.4+ where applicable.
+- Adopt shared py-canon CI, documentation, and release workflows, with
+  package-only line and branch coverage measured before pytest imports.
+- Update compatible dependencies and verify Python 3.12, 3.13, and 3.14.
 
 ### Fixed
 
-- HTTP adapters create remote sessions and use the documented ADK and Agent
-  Engine request formats. Streamed tool results, transfers, termination, and
-  token usage are captured from actual ADK event shapes.
-- Supplied Agent Engine credentials are refreshed when invalid.
-- ADK mock callbacks are restored after a run, and transfers are reported once
-  per turn. LangGraph mocks are scoped to graph execution without modifying
-  caller configuration, and standardized token usage is recorded.
+- HTTP adapters create sessions using the documented ADK and Agent Engine
+  request formats and capture streamed tool results, transfers, and token usage.
+- Agent Engine refreshes supplied credentials when invalid.
+- Tool-call IDs are scoped to native invocations, preserving distinct results
+  when parallel subagents reuse an ID. ADK callbacks are left intact.
+- Installation instructions and rubric imports match the supported package API.
+- Importing the runtime no longer requires pytest. Assertion helpers raise normal
+  assertion errors; pytest fixtures remain in the plugin.
+- Installed next-turn CLI commands import factories from the current project.
+- LangChain mock responses preserve native strings, content blocks, and tool names.
+- Private child history is excluded from new-turn traces, while sibling message IDs
+  remain independent. Checkpoint export fetches only the latest root and persistent
+  subagent snapshots, avoiding scans of historical snapshots and accumulation of
+  completed subagent invocations. Dormant persistent subagent state is preserved.
 
-### Changed
-
-- Measure package-only line and branch coverage before pytest plugin imports,
-  with an 80% floor and deterministic adapter and plugin regression tests.
-
-- Adopted the py-canon fleet standard: shared reusable CI/docs/release
-  workflows, canon ruff/pyright/pydoclint configuration, and a
-  py-canon-managed Sphinx config.
+Checkpoints include managed runtime and mock-service state, not external systems
+or model randomness. Restoring inside an unfinished execution is not supported.
+See the [state-testing guide](https://gojiplus.github.io/understudy/state-testing.html)
+for adapter capabilities, limits, and migration examples.
 
 ## [0.5.0] - 2025-04-10
 

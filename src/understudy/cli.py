@@ -1486,6 +1486,7 @@ def run_turn_command(
     from .execution import Checkpoint, StateFixture, run_turn
     from .models import Expectations, Persona, Scene
 
+    sys.path.insert(0, str(Path.cwd()))
     try:
         result = run_turn(
             import_object(factory),
@@ -1538,6 +1539,7 @@ def replay_until_command(
     from .execution import replay_to
     from .replay import load_trace
 
+    sys.path.insert(0, str(Path.cwd()))
     try:
         checkpoint = replay_to(
             import_object(factory),

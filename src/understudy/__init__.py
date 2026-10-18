@@ -23,6 +23,7 @@ from .agentic import (
     check_agentic,
     run_agentic,
 )
+from .assertions import AssertionHelpers
 from .check import (
     CheckItem,
     CheckResult,
@@ -56,7 +57,6 @@ from .prompts import (
     TONE_EMPATHY,
     TOOL_USAGE_CORRECTNESS,
 )
-from .pytest_plugin import AssertionHelpers
 from .replay import ReplayResult, create_replay_scene, load_trace, replay
 from .runner import AgentApp, AgentResponse, run, simulate, simulate_batch
 from .simulator import Simulator, SimulatorBackend

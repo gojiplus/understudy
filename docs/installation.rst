@@ -25,31 +25,33 @@ understudy has several optional dependency groups:
 
 .. code-block:: bash
 
-   pip install understudy[adk]
+   pip install "understudy[adk]"
 
-**LangGraph Integration** (LangChain/LangGraph support):
-
-.. code-block:: bash
-
-   pip install understudy[langgraph]
-
-**LLM Judges** (litellm for 100+ provider support):
+**LangGraph Integration**:
 
 .. code-block:: bash
 
-   pip install understudy[judges]
+   pip install "understudy[langgraph]"
 
-**All Extras**:
-
-.. code-block:: bash
-
-   pip install understudy[all]
-
-**Development** (includes testing and documentation tools):
+**LangChain create_agent Integration**:
 
 .. code-block:: bash
 
-   pip install understudy[dev]
+   pip install "understudy[langchain]"
+
+**All Extras**, including the CLI and reports:
+
+.. code-block:: bash
+
+   pip install "understudy[all]"
+
+LLM judges use LiteLLM, which is included in the base installation.
+
+**Development** from a repository checkout:
+
+.. code-block:: bash
+
+   uv sync --all-extras --all-groups
 
 Requirements
 ------------

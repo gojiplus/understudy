@@ -23,7 +23,8 @@ def async_fake_streams(monkeypatch):
 
         async def stream(*args, **kwargs):
             for item in graph.stream(*args, **kwargs):
-                yield item
+                namespace, chunk = item
+                yield namespace, "updates", chunk
 
         graph.astream = stream
 
@@ -86,7 +87,7 @@ def test_config_and_mock_scope():
         assert state["input"][0].content == "hello"
         assert config["configurable"]["tenant"] == "customer"
         assert config["configurable"]["thread_id"] == app.thread_id
-        assert stream_mode == "updates"
+        assert "updates" in stream_mode
         yield (), {"agent": {"messages": AIMessage(content=lookup())}}
 
     graph = Mock(

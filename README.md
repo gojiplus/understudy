@@ -13,7 +13,7 @@ Understudy is a scenario-driven testing framework for AI agents that simulates r
 
 Testing with understudy is **4 steps**:
 
-1. **Wrap your agent** — Adapt your agent (ADK, LangGraph, HTTP) to understudy's interface
+1. **Wrap your agent** — Adapt your agent (ADK, LangGraph, LangChain, HTTP) to understudy's interface
 2. **Mock your tools** — Register handlers that return test data instead of calling real services
 3. **Write scenes** — YAML files defining what the simulated user wants and what you expect
 4. **Run and assert** — Execute simulations, check traces, generate reports
@@ -32,7 +32,7 @@ Evaluate autonomous agents executing multi-step tasks.
 - Use case: Code agents, research agents, task automation
 - Assert on actions: `trace.performed("action")`
 
-See [examples/README.md](examples/README.md) for complete examples of both paradigms.
+See [examples/README.md](https://github.com/gojiplus/understudy/blob/main/examples/README.md) for complete examples of both paradigms.
 
 **See real examples:**
 - [Example scene](https://github.com/gojiplus/understudy/blob/main/examples/scenes/return_eligible_backpack.yaml) — YAML defining a test scenario
@@ -49,14 +49,14 @@ exchange X, then execute and assert only against exchange X+1. ADK and LangGraph
 support isolated checkpoint forks; `LangChainApp` builds an instrumented LangChain
 agent with tool middleware. Traces retain nested invocation identities.
 
-See the [state-testing guide](docs/state-testing.rst)
+See the [state-testing guide](https://gojiplus.github.io/understudy/state-testing.html)
 for `run_turn`, `replay_to`, scoped tool mocks, pytest fixtures, CLI commands, and
 framework-specific restoration limits.
 
 ## Installation
 
 ```bash
-pip install understudy[all]
+pip install "understudy[all]"
 ```
 
 ## Quick Start
@@ -82,7 +82,11 @@ mocks = MockToolkit()
 
 @mocks.handle("lookup_order")
 def lookup_order(order_id: str) -> dict:
-    return {"order_id": order_id, "items": [...], "status": "delivered"}
+    return {
+        "order_id": order_id,
+        "items": [{"sku": "BACKPACK-01", "quantity": 1}],
+        "status": "delivered",
+    }
 
 
 @mocks.handle("create_return")
@@ -260,7 +264,7 @@ assert result.score == 1
 Built-in rubrics:
 
 ```python
-from understudy.judges import (
+from understudy.prompts import (
     TOOL_USAGE_CORRECTNESS,
     POLICY_COMPLIANCE,
     TONE_EMPATHY,

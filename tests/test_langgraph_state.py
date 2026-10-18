@@ -253,3 +253,280 @@ def test_nested_agents_with_identical_tool_call_ids():
     assert len(result.trace.tool_calls) == 2
     for call in result.trace.tool_calls:
         assert call.result in call.agent_path
+
+
+def test_private_child_history_is_excluded_after_restore():
+    from langchain_core.messages import ToolMessage
+
+    def factory():
+        def child_node(state):
+            n = state.get("n", 0) + 1
+            new = (
+                [
+                    AIMessage(
+                        content="",
+                        tool_calls=[{"name": "only_first", "args": {}, "id": "first"}],
+                    ),
+                    ToolMessage(content="first result", tool_call_id="first"),
+                ]
+                if n == 1
+                else [AIMessage(content="no new tools")]
+            )
+            return {"n": n, "messages": state["messages"] + new}
+
+        child = (
+            StateGraph(State)
+            .add_node("child_model", child_node)
+            .add_edge(START, "child_model")
+            .add_edge("child_model", END)
+            .compile(checkpointer=True)
+        )
+
+        def wrapper(state):
+            child.invoke({"messages": [state["messages"][-1]]})
+            return {"messages": [AIMessage(content="root done")]}
+
+        graph = (
+            StateGraph(State)
+            .add_node("wrapper", wrapper)
+            .add_edge(START, "wrapper")
+            .add_edge("wrapper", END)
+            .compile(checkpointer=InMemorySaver())
+        )
+        return LangGraphApp(graph)
+
+    first = run_turn(factory, "one", capture_checkpoint=True)
+    assert first.trace.called("only_first")
+    second = run_turn(factory, "two", checkpoint=first.checkpoint)
+    assert not second.trace.called("only_first")
+
+
+def test_sibling_message_ids_are_independent():
+    from langchain_core.messages import ToolMessage
+
+    def child(label):
+        def node(state):
+            return {
+                "messages": [
+                    AIMessage(
+                        id="same-ai",
+                        content="",
+                        tool_calls=[{"id": "call", "name": "lookup", "args": {}}],
+                    ),
+                    ToolMessage(id="same-tool", content=label, tool_call_id="call"),
+                ]
+            }
+
+        return (
+            StateGraph(State)
+            .add_node("model", node)
+            .add_edge(START, "model")
+            .add_edge("model", END)
+            .compile(checkpointer=True)
+        )
+
+    def factory():
+        a, b = child("a"), child("b")
+
+        def call_a(state):
+            a.invoke({"messages": [state["messages"][-1]]})
+            return {"messages": [AIMessage(content="a done")]}
+
+        def call_b(state):
+            b.invoke({"messages": [state["messages"][-1]]})
+            return {"messages": [AIMessage(content="b done")]}
+
+        graph = (
+            StateGraph(State)
+            .add_node("a", call_a)
+            .add_node("b", call_b)
+            .add_edge(START, "a")
+            .add_edge(START, "b")
+            .add_edge("a", END)
+            .add_edge("b", END)
+            .compile(checkpointer=InMemorySaver())
+        )
+        return LangGraphApp(graph)
+
+    result = run_turn(factory, "go")
+    assert sorted(c.result for c in result.trace.tool_calls) == ["a", "b"]
+
+
+def test_binary_runtime_state_is_rejected_at_checkpoint_capture():
+    class BinaryState(State):
+        data: bytes
+
+    def factory():
+        def node(state):
+            return {"messages": [AIMessage(content="ok")], "data": b"\xff\x00"}
+
+        return LangGraphApp(
+            StateGraph(BinaryState)
+            .add_node("worker", node)
+            .add_edge(START, "worker")
+            .add_edge("worker", END)
+            .compile(checkpointer=InMemorySaver())
+        )
+
+    assert run_turn(factory, "go").state_after["data"] == b"\xff\x00"
+    with pytest.raises(ValueError, match="JSON-compatible"):
+        run_turn(factory, "go", capture_checkpoint=True)
+
+
+def test_checkpoint_export_work_grows_linearly():
+    class CountingSerde:
+        def __init__(self, wrapped):
+            self.wrapped, self.calls, self.bytes = wrapped, 0, 0
+
+        def loads_typed(self, data):
+            self.calls += 1
+            self.bytes += len(data[1])
+            return self.wrapped.loads_typed(data)
+
+        def dumps_typed(self, value):
+            return self.wrapped.dumps_typed(value)
+
+    work = []
+    for turns in [10, 40]:
+        app = graph_app()
+        saver = app.graph.checkpointer
+        serde = CountingSerde(saver.serde)
+        saver.serde = serde
+        app.start()
+        try:
+            for _ in range(turns):
+                app.send("next")
+            serde.calls = serde.bytes = 0
+            checkpoint = app.checkpoint()
+            assert checkpoint.state["n"] == turns
+            work.append((serde.calls, serde.bytes))
+        finally:
+            app.stop()
+    assert work[1][0] <= 2 * work[0][0]
+    assert work[1][1] <= 6 * work[0][1]
+
+
+def test_fresh_child_invocations_can_reuse_message_ids():
+    from langchain_core.messages import ToolMessage
+
+    def factory():
+        def child_node(state):
+            return {
+                "messages": [
+                    AIMessage(
+                        id="first-message",
+                        content="",
+                        tool_calls=[{"name": "lookup", "id": "call", "args": {}}],
+                    ),
+                    ToolMessage(content="new result", tool_call_id="call"),
+                ]
+            }
+
+        child = (
+            StateGraph(State)
+            .add_node("model", child_node)
+            .add_edge(START, "model")
+            .add_edge("model", END)
+            .compile()
+        )
+
+        def wrapper(state):
+            child.invoke({"messages": [state["messages"][-1]]})
+            return {"messages": [AIMessage(content="root done")]}
+
+        graph = (
+            StateGraph(State)
+            .add_node("wrapper", wrapper)
+            .add_edge(START, "wrapper")
+            .add_edge("wrapper", END)
+            .compile(checkpointer=InMemorySaver())
+        )
+        return LangGraphApp(graph)
+
+    first = run_turn(factory, "one", capture_checkpoint=True)
+    second = run_turn(factory, "two", checkpoint=first.checkpoint)
+    assert len(first.trace.tool_calls) == len(second.trace.tool_calls) == 1
+
+
+def test_completed_child_invocations_do_not_accumulate_in_portable_state():
+    sizes = []
+    for turns in [10, 40]:
+        child = (
+            StateGraph(State)
+            .add_node("model", counter)
+            .add_edge(START, "model")
+            .add_edge("model", END)
+            .compile()
+        )
+        app = LangGraphApp(
+            StateGraph(State)
+            .add_node("child", child)
+            .add_edge(START, "child")
+            .add_edge("child", END)
+            .compile(checkpointer=InMemorySaver())
+        )
+        app.start()
+        try:
+            for _ in range(turns):
+                app.send("next")
+            checkpoint = app.checkpoint()
+            assert len(checkpoint.payload["records"]) == 1
+            assert len(app._message_history) == 1
+            assert app._checkpoint_namespaces == {""}
+            sizes.append(len(checkpoint.model_dump_json()))
+        finally:
+            app.stop()
+    assert sizes[1] <= 6 * sizes[0]
+
+
+@pytest.mark.parametrize("transient_wrapper", [False, True])
+def test_dormant_persistent_child_survives_checkpoint_pruning(transient_wrapper):
+    class PrivateState(State):
+        private_count: int
+
+    def factory():
+        def increment(state):
+            return {"private_count": state.get("private_count", 0) + 1}
+
+        child = (
+            StateGraph(PrivateState)
+            .add_node("increment", increment)
+            .add_edge(START, "increment")
+            .add_edge("increment", END)
+            .compile(checkpointer=True)
+        )
+
+        def wrapper(state):
+            if state["messages"][-1].content == "skip":
+                return {"messages": [AIMessage(content="skipped")]}
+            value = child.invoke({"messages": [state["messages"][-1]]})
+            return {"messages": [AIMessage(content=str(value["private_count"]))]}
+
+        node = wrapper
+        if transient_wrapper:
+            node = (
+                StateGraph(State)
+                .add_node("wrapper", wrapper)
+                .add_edge(START, "wrapper")
+                .add_edge("wrapper", END)
+                .compile()
+            )
+        return LangGraphApp(
+            StateGraph(State)
+            .add_node("team", node)
+            .add_edge(START, "team")
+            .add_edge("team", END)
+            .compile(checkpointer=InMemorySaver())
+        )
+
+    first = run_turn(factory, "one", capture_checkpoint=True)
+    skipped = run_turn(
+        factory, "skip", checkpoint=first.checkpoint, capture_checkpoint=True
+    )
+    resumed = run_turn(factory, "three", checkpoint=skipped.checkpoint)
+    assert [r.trace.turns[-1].content for r in [first, skipped, resumed]] == [
+        "1",
+        "skipped",
+        "2",
+    ]
+    assert len(skipped.checkpoint.payload["records"]) == 2

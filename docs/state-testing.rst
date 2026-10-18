@@ -49,6 +49,10 @@ that changes when your application's state schema or graph changes. Restoring a
 mismatched adapter, framework version, or application ID raises an error.
 
 Checkpoint files are trusted test fixtures and may contain conversation data.
+Public checkpoint state, mock-service state, and recorded tool arguments/results
+must round-trip through JSON without changing values. Binary data, nonfinite
+numbers, and custom objects are rejected when capturing or assigning checkpoint
+metadata; ordinary in-memory runs can still use richer native state.
 They do not capture external databases, provider-side memory, credentials, or
 model randomness. Restore external systems through test fixtures or mock-service
 state. ADK artifact storage is not included; capture rejects sessions that have
@@ -181,3 +185,35 @@ The CLI takes JSON fixture, patch, and expectation files:
 The report identifies the starting boundary and shows native invocation IDs,
 parent relationships, and state changes. A failed expectation produces a nonzero
 CLI exit status and still writes the result for inspection.
+
+Performance
+-----------
+
+Checkpoint capture reads the latest root snapshot and persistent subagent state.
+Completed per-invocation subagent state is excluded; persistent state is retained
+even when a subagent skips the latest turn. Capture does not scan historical
+snapshots. Export and restore still process the state
+being saved, so their cost and artifact size grow with retained conversation data.
+Keep histories bounded using the framework's own state-management mechanisms when
+long conversations do not need every earlier message.
+Native checkpoint-store retention is controlled by the framework and backend;
+Understudy does not delete their stored history.
+
+For tests of several alternatives at the same boundary, capture once and fork the
+checkpoint. ``replay_to`` deliberately re-executes every input in the prefix, so it
+also repeats the model/tool work unless mocked. Checkpoint export is opt-in via
+``capture_checkpoint=True``.
+
+Run the offline benchmark from a repository checkout with all extras installed:
+
+.. code-block:: bash
+
+   uv run python benchmarks/state_testing.py
+
+It measures both a single graph and a graph invoking a fresh subagent each turn,
+and reports median timings over three runs for native and instrumented turns,
+checkpoint capture, JSON round-trip, restore, and the next turn after restoration.
+The deterministic graph makes no model or tool API calls. Timings depend on the
+machine, SDK versions, payload sizes, and graph shape. The regression suite also
+checks that checkpoint export's deserialization work and nested checkpoint size
+grow linearly with retained state, without imposing unstable wall-clock limits in CI.

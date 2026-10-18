@@ -249,3 +249,17 @@ def test_initialization_errors_close_without_executing():
     app = HTTPApp("https://example.test", "test")
     with pytest.raises(UnsupportedCapabilityError, match="cannot be intercepted"):
         app.start(MockToolkit())
+
+
+def test_checkpoint_rejects_nonportable_assigned_metadata():
+    saved = CounterApp().checkpoint()
+    with pytest.raises(ValueError, match="JSON-compatible"):
+        saved.tool_state = {"bytes": b"abc"}
+    with pytest.raises(ValueError, match="JSON-compatible"):
+        saved.history = [
+            Turn(
+                role="agent",
+                content="",
+                tool_calls=[ToolCall(tool_name="binary", result=b"abc")],
+            )
+        ]
