@@ -189,11 +189,15 @@ CLI exit status and still writes the result for inspection.
 Performance
 -----------
 
-Checkpoint capture reads the latest snapshot of each observed native namespace.
-It does not scan historical snapshots. Export and restore still process the state
+Checkpoint capture reads the latest root snapshot and persistent subagent state.
+Completed per-invocation subagent state is excluded; persistent state is retained
+even when a subagent skips the latest turn. Capture does not scan historical
+snapshots. Export and restore still process the state
 being saved, so their cost and artifact size grow with retained conversation data.
 Keep histories bounded using the framework's own state-management mechanisms when
 long conversations do not need every earlier message.
+Native checkpoint-store retention is controlled by the framework and backend;
+Understudy does not delete their stored history.
 
 For tests of several alternatives at the same boundary, capture once and fork the
 checkpoint. ``replay_to`` deliberately re-executes every input in the prefix, so it
@@ -206,9 +210,10 @@ Run the offline benchmark from a repository checkout with all extras installed:
 
    uv run python benchmarks/state_testing.py
 
-It reports median timings over three runs for native and instrumented turns,
+It measures both a single graph and a graph invoking a fresh subagent each turn,
+and reports median timings over three runs for native and instrumented turns,
 checkpoint capture, JSON round-trip, restore, and the next turn after restoration.
 The deterministic graph makes no model or tool API calls. Timings depend on the
 machine, SDK versions, payload sizes, and graph shape. The regression suite also
-checks that checkpoint export's deserialization work grows linearly with retained
-state, without imposing unstable wall-clock limits in CI.
+checks that checkpoint export's deserialization work and nested checkpoint size
+grow linearly with retained state, without imposing unstable wall-clock limits in CI.

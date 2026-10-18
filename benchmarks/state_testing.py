@@ -27,11 +27,20 @@ def respond(state: State) -> dict:  # noqa: ARG001
     return {"messages": [AIMessage(content="response" * 20)]}
 
 
-def build_app() -> LangGraphApp:
+def build_app(*, nested: bool = False) -> LangGraphApp:
     """Create a fresh graph and checkpoint store for each measurement."""
+    node = respond
+    if nested:
+        node = (
+            StateGraph(State)
+            .add_node("model", respond)
+            .add_edge(START, "model")
+            .add_edge("model", END)
+            .compile()
+        )
     graph = (
         StateGraph(State)
-        .add_node("agent", respond)
+        .add_node("agent", node)
         .add_edge(START, "agent")
         .add_edge("agent", END)
         .compile(checkpointer=InMemorySaver())
@@ -39,9 +48,9 @@ def build_app() -> LangGraphApp:
     return LangGraphApp(graph)
 
 
-def measure(turns: int) -> dict[str, float]:
+def measure(turns: int, *, nested: bool = False) -> dict[str, float]:
     """Measure native turns, instrumented turns, and a portable checkpoint fork."""
-    native = build_app()
+    native = build_app(nested=nested)
     with asyncio.Runner() as loop:
         started = perf_counter()
         for _ in range(turns):
@@ -53,7 +62,7 @@ def measure(turns: int) -> dict[str, float]:
             )
         native_ms = (perf_counter() - started) * 1000 / turns
 
-    app = build_app()
+    app = build_app(nested=nested)
     app.start()
     try:
         started = perf_counter()
@@ -70,7 +79,7 @@ def measure(turns: int) -> dict[str, float]:
     finally:
         app.stop()
 
-    restored = build_app()
+    restored = build_app(nested=nested)
     restored.start()
     try:
         started = perf_counter()
@@ -96,16 +105,19 @@ def main() -> None:
     """Print median measurements from three runs at each history size."""
     measure(5)
     results = []
-    for turns in [50, 100, 200]:
-        samples = [measure(turns) for _ in range(3)]
-        results.append(
-            {
-                "turns": turns,
-                **{
-                    key: round(median(s[key] for s in samples), 3) for key in samples[0]
-                },
-            }
-        )
+    for nested in [False, True]:
+        for turns in [50, 100, 200]:
+            samples = [measure(turns, nested=nested) for _ in range(3)]
+            results.append(
+                {
+                    "graph": "nested" if nested else "single",
+                    "turns": turns,
+                    **{
+                        key: round(median(s[key] for s in samples), 3)
+                        for key in samples[0]
+                    },
+                }
+            )
     sys.stdout.write(json.dumps(results, indent=2) + "\n")
 
 

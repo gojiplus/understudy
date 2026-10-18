@@ -156,7 +156,10 @@ class LangGraphApp(AgentApp):
             ):
                 if mode == "checkpoints":
                     checkpoint_ns = chunk["config"]["configurable"]["checkpoint_ns"]
-                    self._checkpoint_namespaces.add(checkpoint_ns)
+                    # Per-invocation namespaces contain task IDs; only stable
+                    # per-thread state can be resumed after a completed turn.
+                    if ":" not in checkpoint_ns:
+                        self._checkpoint_namespaces.add(checkpoint_ns)
                     if not checkpoint_ns:
                         latest_values = chunk["values"]
                     continue
@@ -263,7 +266,8 @@ class LangGraphApp(AgentApp):
                                             break
 
         for namespace, ids in seen_messages.items():
-            self._message_history.setdefault(namespace, set()).update(ids)
+            if all(":" not in part for part in namespace):
+                self._message_history.setdefault(namespace, set()).update(ids)
 
         # capture state snapshot from graph and detect END node
         state_snapshot = None
