@@ -2,9 +2,18 @@
 
 import asyncio
 import logging
+from copy import deepcopy
 from datetime import UTC, datetime
+from importlib.metadata import version
 from typing import Any
 
+from ..execution import (
+    AdapterCapabilities,
+    Checkpoint,
+    StateFixture,
+    UnsupportedCapabilityError,
+)
+from ..instrumentation import ExecutionRecorder
 from ..mocks import MockToolkit
 from ..runner import AgentApp, AgentResponse
 from ..trace import AgentTransfer, ToolCall
@@ -26,34 +35,6 @@ def _load_dotenv():
 _load_dotenv()
 
 
-def _create_mock_callback(mocks: MockToolkit | None):
-    """Create a before_tool_callback that returns mock responses.
-
-    Args:
-        mocks: MockToolkit instance or None.
-
-    Returns:
-        A callback function compatible with google-adk's before_tool_callback.
-        Returns dict to bypass real tool execution (mock response).
-        Returns None to allow normal execution.
-    """
-
-    # google-adk invokes before_tool_callback with these exact keyword
-    # arguments; tool_context is part of that fixed signature.
-    def callback(tool, args: dict[str, Any], tool_context) -> dict | None:  # noqa: ARG001
-        if mocks is None:
-            return None
-        tool_name = getattr(tool, "name", None) or getattr(tool, "__name__", str(tool))
-        if mocks.get_handler(tool_name):
-            try:
-                return mocks.call(tool_name, **args)
-            except Exception as e:
-                return {"error": str(e)}
-        return None
-
-    return callback
-
-
 class ADKApp(AgentApp):
     """Wraps a Google ADK Agent for use with understudy.
 
@@ -66,32 +47,56 @@ class ADKApp(AgentApp):
         trace = run(app, scene)
     """
 
-    def __init__(self, agent: Any, session_id: str | None = None):
+    capabilities = AdapterCapabilities(
+        tools=True,
+        agents=True,
+        nested=True,
+        state=True,
+        checkpoints=True,
+        interception=True,
+    )
+
+    def __init__(
+        self, agent: Any, session_id: str | None = None, *, app_id: str | None = None
+    ):
         """Wrap a google-adk agent.
 
         Args:
             agent: A google.adk.Agent instance.
             session_id: Optional session ID. If None, a random one is generated.
+            app_id: Application revision identifier checked when restoring fixtures.
         """
         self.agent = agent
+        self.app_id = app_id or getattr(agent, "name", "adk")
+        self._loop: Any = None
+        self._recorder = ExecutionRecorder()
+        self._pending_tools = False
+        self._plugin: Any = None
         self.session_id = session_id
         self._runner = None
-        self._session = None
-        self._session_service = None
+        self._session: Any = None
+        self._session_service: Any = None
         self._mocks: MockToolkit | None = None
         self._current_agent: str | None = None
         self._agent_transfers: list[AgentTransfer] = []
-        self._original_tool_callback: Any = None
 
     def start(self, mocks: MockToolkit | None = None) -> None:
         """Initialize the ADK session."""
-        asyncio.run(self._start_async(mocks))
+        self._loop = asyncio.Runner()
+        try:
+            self._loop.run(self._start_async(mocks))
+        except BaseException:
+            self.stop()
+            raise
 
     async def _start_async(self, mocks: MockToolkit | None = None) -> None:
         """Async implementation of start."""
         try:
             from google.adk import Runner
+            from google.adk.apps import App
             from google.adk.sessions import InMemorySessionService
+
+            from .instrumentation import TestPlugin
         except ImportError as e:
             raise ImportError(
                 "google-adk package required. Install with: pip install understudy[adk]"
@@ -114,14 +119,13 @@ class ADKApp(AgentApp):
         )
 
         self._session_service = InMemorySessionService()
-        if mocks:
-            self._original_tool_callback = self.agent.before_tool_callback
-            self.agent.before_tool_callback = _create_mock_callback(mocks)
-            logger.debug("Registered %d mock handlers", len(mocks.available_tools))
-
+        self._recorder = ExecutionRecorder()
+        self._pending_tools = False
+        self._plugin = TestPlugin(self._recorder, mocks)
         self._runner = Runner(
-            agent=self.agent,
-            app_name="understudy_test",
+            app=App(
+                name="understudy_test", root_agent=self.agent, plugins=[self._plugin]
+            ),
             session_service=self._session_service,
         )
         self._session = await self._session_service.create_session(
@@ -133,7 +137,9 @@ class ADKApp(AgentApp):
 
     def send(self, message: str) -> AgentResponse:
         """Send a user message to the ADK agent and capture the response."""
-        return asyncio.run(self._send_async(message))
+        if self._loop is None:
+            raise RuntimeError("ADK session is not open")
+        return self._loop.run(self._send_async(message))
 
     async def _send_async(self, message: str) -> AgentResponse:
         """Async implementation of send."""
@@ -161,6 +167,9 @@ class ADKApp(AgentApp):
             parts=[types.Part(text=message)],
         )
 
+        self._pending_tools = False
+        self._recorder.executions.clear()
+        self._recorder.by_id.clear()
         tool_calls: list[ToolCall] = []
         self._agent_transfers = []
         agent_text_parts: list[str] = []
@@ -175,17 +184,11 @@ class ADKApp(AgentApp):
             session_id=self._session.id,
             new_message=user_content,
         ):
+            if event.long_running_tool_ids:
+                self._pending_tools = True
             # track agent attribution from event.author
             if hasattr(event, "author") and event.author:
                 event_agent = event.author
-                if event_agent != current_agent_name and current_agent_name:
-                    self._agent_transfers.append(
-                        AgentTransfer(
-                            from_agent=current_agent_name,
-                            to_agent=event_agent,
-                            timestamp=datetime.now(UTC),
-                        )
-                    )
                 current_agent_name = event_agent
 
             # detect explicit transfer_to_agent actions
@@ -206,6 +209,11 @@ class ADKApp(AgentApp):
                     )
                 current_agent_name = target_agent
 
+            scope = (
+                self._recorder.observe(event.node_info.path, event.invocation_id)
+                if event.node_info.path
+                else None
+            )
             # capture tool calls using get_function_calls()
             for fc in event.get_function_calls():
                 if not fc.name:
@@ -216,7 +224,10 @@ class ADKApp(AgentApp):
                 call = ToolCall(
                     tool_name=fc.name,
                     arguments=dict(fc.args) if fc.args else {},
-                    agent_name=current_agent_name,
+                    agent_name=event.author,
+                    call_id=fc.id,
+                    execution_id=scope.id if scope else None,
+                    agent_path=scope.agent_path if scope else (),
                 )
                 tool_calls.append(call)
                 logger.debug("Tool call: %s", fc.name)
@@ -224,43 +235,41 @@ class ADKApp(AgentApp):
             # capture function responses and update tool call results
             for fr in event.get_function_responses():
                 for call in tool_calls:
-                    if call.tool_name == fr.name and call.result is None:
+                    if (
+                        call.execution_id == (scope.id if scope else None)
+                        and call.agent_name == event.author
+                        and (
+                            call.call_id == fr.id
+                            if fr.id
+                            else call.tool_name == fr.name
+                        )
+                        and call.result is None
+                    ):
                         call.result = fr.response
                         break
 
-            # capture text responses from content parts
-            if (
-                hasattr(event, "content")
-                and event.content
-                and hasattr(event.content, "parts")
-            ):
-                for part in event.content.parts or []:
-                    text = getattr(part, "text", None)
-                    if text:
-                        agent_text_parts.append(text)
-
-            # capture token usage from usage_metadata
-            if hasattr(event, "usage_metadata") and event.usage_metadata:
+            if event.content:
+                agent_text_parts.extend(
+                    part.text
+                    for part in event.content.parts or []
+                    if part.text and not part.thought
+                )
+            if event.usage_metadata:
                 usage = event.usage_metadata
-                input_tokens += getattr(usage, "prompt_token_count", 0) or 0
-                output_tokens += getattr(usage, "candidates_token_count", 0) or 0
-                thinking_tokens += getattr(usage, "thoughts_token_count", 0) or 0
-
-            # detect if agent signaled conversation end via escalate action
-            if (
-                hasattr(event, "actions")
-                and event.actions
-                and getattr(event.actions, "escalate", False)
-            ):
+                input_tokens += usage.prompt_token_count or 0
+                output_tokens += usage.candidates_token_count or 0
+                thinking_tokens += usage.thoughts_token_count or 0
+            if event.actions.escalate:
                 terminal_state = "agent_ended"
-                logger.debug("Agent escalated (ended conversation)")
 
         self._current_agent = current_agent_name
-
-        # capture state snapshot from session
-        state_snapshot = None
-        if self._session and hasattr(self._session, "state"):
-            state_snapshot = dict(self._session.state) if self._session.state else None
+        self._pending_tools = self._pending_tools or any(
+            call.result is None for call in tool_calls
+        )
+        if self._pending_tools:
+            terminal_state = "interrupted"
+        self._recorder.finish()
+        state_snapshot = await self._state_async()
 
         return AgentResponse(
             content=" ".join(agent_text_parts),
@@ -272,13 +281,145 @@ class ADKApp(AgentApp):
             output_tokens=output_tokens,
             thinking_tokens=thinking_tokens,
             state_snapshot=state_snapshot,
+            executions=deepcopy(self._recorder.executions),
         )
 
+    def _require_session(self) -> None:
+        if self._loop is None or self._session is None:
+            raise RuntimeError("ADK session is not open")
+
+    async def _state_async(self) -> dict[str, Any]:
+        self._session = await self._session_service.get_session(
+            app_name="understudy_test",
+            user_id="understudy_user",
+            session_id=self._session.id,
+        )
+        return deepcopy(self._session.state)
+
+    def get_state(self) -> dict[str, Any]:
+        """Read the session's current managed state."""
+        self._require_session()
+        return self._loop.run(self._state_async())
+
+    def validate_checkpoint(self, checkpoint: Checkpoint) -> None:
+        """Reject checkpoints from a different framework or application revision."""
+        if (checkpoint.adapter, checkpoint.framework_version, checkpoint.app_id) != (
+            "adk",
+            version("google-adk"),
+            self.app_id,
+        ):
+            raise ValueError(
+                "Checkpoint adapter, framework version, or app_id does not match"
+            )
+
+    def checkpoint(self) -> Checkpoint:
+        """Capture session state and native event history at a completed boundary."""
+        state = self.get_state()
+        if self._pending_tools:
+            raise UnsupportedCapabilityError(
+                "Checkpoint capture requires a completed turn "
+                "without pending or long-running tools"
+            )
+        if any(event.actions.artifact_delta for event in self._session.events):
+            raise UnsupportedCapabilityError(
+                "Artifact storage is not included in ADK checkpoints"
+            )
+        return Checkpoint(
+            adapter="adk",
+            framework_version=version("google-adk"),
+            app_id=self.app_id,
+            state=state,
+            payload={
+                "events": [e.model_dump(mode="json") for e in self._session.events]
+            },
+        )
+
+    async def _append_events(
+        self, records: list[dict[str, Any]], state: dict[str, Any]
+    ) -> None:
+        from google.adk.events import Event, EventActions
+
+        for record in records:
+            event = Event.model_validate(record)
+            await self._session_service.append_event(session=self._session, event=event)
+        await self._session_service.append_event(
+            session=self._session,
+            event=Event(author="user", actions=EventActions(state_delta=state)),
+        )
+        await self._state_async()
+
+    def restore(self, checkpoint: Checkpoint) -> None:
+        """Restore native events and state into this fresh isolated session."""
+        self.validate_checkpoint(checkpoint)
+        self._require_session()
+        self._loop.run(
+            self._append_events(
+                deepcopy(checkpoint.payload["events"]), deepcopy(checkpoint.state)
+            )
+        )
+
+    def inject(self, fixture: StateFixture) -> None:
+        """Seed synthetic history and managed state without executing the agent."""
+        from google.adk.events import Event
+        from google.genai import types
+
+        self._require_session()
+        events = []
+        for turn in fixture.history:
+            parts = [types.Part(text=turn.content)] if turn.content else []
+            parts.extend(
+                types.Part(
+                    function_call=types.FunctionCall(
+                        name=call.tool_name,
+                        args=call.arguments,
+                        id=call.call_id,
+                    )
+                )
+                for call in turn.tool_calls
+            )
+            author = (
+                "user" if turn.role == "user" else (turn.agent_name or self.agent.name)
+            )
+            role = "user" if turn.role == "user" else "model"
+            events.append(
+                Event(
+                    author=author, content=types.Content(role=role, parts=parts)
+                ).model_dump(mode="json")
+            )
+            if turn.tool_calls:
+                results = [
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            name=c.tool_name,
+                            id=c.call_id,
+                            response=c.result
+                            if isinstance(c.result, dict)
+                            else {"result": c.result},
+                        )
+                    )
+                    for c in turn.tool_calls
+                ]
+                events.append(
+                    Event(
+                        author=author, content=types.Content(role="user", parts=results)
+                    ).model_dump(mode="json")
+                )
+        self._loop.run(self._append_events(events, deepcopy(fixture.state)))
+
+    def patch_state(self, patch: dict[str, Any]) -> None:
+        """Apply top-level updates using ADK's managed event mechanism."""
+        self._require_session()
+        self._loop.run(self._append_events([], deepcopy(patch)))
+
     def stop(self) -> None:
-        """Clean up the ADK session."""
-        if self._mocks is not None:
-            self.agent.before_tool_callback = self._original_tool_callback
-            self._original_tool_callback = None
+        """Close framework resources and the session's event loop."""
+        if self._loop is not None:
+            try:
+                if self._runner is not None:
+                    self._loop.run(self._runner.close())
+            finally:
+                self._loop.close()
+                self._loop = None
         self._runner = None
         self._session = None
         self._session_service = None

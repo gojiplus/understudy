@@ -84,7 +84,11 @@ def check(trace: Trace, expectations: Expectations) -> CheckResult:
         A CheckResult with individual check outcomes.
     """
     result = CheckResult()
-    called_tools = set(trace.call_sequence())
+    called_tools = (
+        set(trace.call_sequence())
+        if expectations.required_tools or expectations.forbidden_tools
+        else set()
+    )
 
     # required tools
     for tool in expectations.required_tools:
@@ -108,7 +112,11 @@ def check(trace: Trace, expectations: Expectations) -> CheckResult:
         )
 
     # required agents
-    invoked_agents = set(trace.agents_invoked())
+    invoked_agents = (
+        set(trace.agents_invoked())
+        if expectations.required_agents or expectations.forbidden_agents
+        else set()
+    )
     for agent in expectations.required_agents:
         status = "invoked" if agent in invoked_agents else "NOT invoked"
         result.checks.append(

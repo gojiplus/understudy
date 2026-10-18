@@ -1,103 +1,77 @@
-"""Mockable tool wrapper for LangGraph tools."""
+"""Tool interception scoped to each execution, including framework worker threads."""
 
 import functools
+import inspect
 from collections.abc import Callable
+from contextvars import ContextVar, Token
 from typing import Any
 
 from ..mocks import MockToolkit
 
-_global_mock_toolkit: MockToolkit | None = None
+_toolkit: ContextVar[MockToolkit | None] = ContextVar("understudy_tools", default=None)
 
 
 def set_mock_toolkit(mocks: MockToolkit | None) -> None:
-    """Set the active MockToolkit globally.
-
-    This should be called before invoking the LangGraph graph
-    to enable mock responses for tools decorated with @mockable_tool.
-
-    Note: Uses a global variable to support LangGraph's thread-pooled
-    tool execution. For concurrent test execution, ensure tests are
-    isolated or use separate processes.
-
-    Usage:
-        from understudy.langgraph.tools import set_mock_toolkit
-
-        mocks = MockToolkit()
-        @mocks.handle("search_orders")
-        def mock_search(order_id: str):
-            return {"order_id": order_id, "status": "delivered"}
-
-        set_mock_toolkit(mocks)
-        try:
-            result = compiled_graph.invoke(...)
-        finally:
-            set_mock_toolkit(None)
-    """
-    global _global_mock_toolkit
-    _global_mock_toolkit = mocks
+    """Set mocks in the current execution context."""
+    _toolkit.set(mocks)
 
 
 def get_mock_toolkit() -> MockToolkit | None:
-    """Get the active MockToolkit."""
-    return _global_mock_toolkit
+    """Read the current execution's mocks."""
+    return _toolkit.get()
+
+
+def tool_path() -> tuple[str, ...]:
+    """Read the native graph namespace when invoked inside a graph node."""
+    try:
+        from langgraph.config import get_config
+
+        metadata = get_config().get("metadata", {})
+    except RuntimeError:
+        return ()
+    namespace = metadata.get("langgraph_checkpoint_ns", "")
+    path = tuple(part.split(":")[0] for part in namespace.split("|") if part)
+    node = metadata.get("langgraph_node")
+    return (*path, node) if node and (not path or path[-1] != node) else path
 
 
 def mockable_tool[F: Callable[..., Any]](func: F) -> F:
-    """Decorator that makes a LangGraph tool mockable during testing.
+    """Intercept a synchronous or asynchronous tool before executing it."""
 
-    When a MockToolkit is active (via set_mock_toolkit), the decorator
-    checks if there's a mock handler registered for this tool. If so,
-    it returns the mock response instead of executing the real function.
+    def handler():
+        mocks = get_mock_toolkit()
+        return mocks.resolve(func.__name__, tool_path()) if mocks is not None else None
 
-    Usage:
-        from understudy.langgraph.tools import mockable_tool
+    if inspect.iscoroutinefunction(func):
 
-        @mockable_tool
-        def search_orders(order_id: str) -> dict:
-            # Real implementation
-            return db.search(order_id)
+        @functools.wraps(func)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            result = (handler() or func)(*args, **kwargs)
+            return await result if inspect.isawaitable(result) else result
 
-        # In production: executes real implementation
-        # During testing with set_mock_toolkit: returns mock response
-    """
+        return async_wrapper  # type: ignore[return-value]
 
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        mocks = get_mock_toolkit()
-        if mocks is not None:
-            tool_name = func.__name__
-            handler = mocks.get_handler(tool_name)
-            if handler is not None:
-                return handler(*args, **kwargs)
-        return func(*args, **kwargs)
+        return (handler() or func)(*args, **kwargs)
 
     return wrapper  # type: ignore[return-value]
 
 
 class MockableToolContext:
-    """Context manager for setting up mock toolkit.
-
-    Usage:
-        mocks = MockToolkit()
-        @mocks.handle("search_orders")
-        def mock_search(order_id: str):
-            return {"found": True}
-
-        with MockableToolContext(mocks):
-            result = compiled_graph.invoke(...)
-    """
+    """Install mocks for one invocation and restore its caller's context."""
 
     def __init__(self, mocks: MockToolkit | None):
-        """Store the toolkit to activate while the context is entered."""
+        """Configure mocks for this scope."""
         self.mocks = mocks
-        self._previous: MockToolkit | None = None
+        self._token: Token | None = None
 
     def __enter__(self) -> "MockableToolContext":
-        """Install the mock toolkit, remembering the previous one."""
-        self._previous = get_mock_toolkit()
-        set_mock_toolkit(self.mocks)
+        """Install mocks in the current context."""
+        self._token = _toolkit.set(self.mocks)
         return self
 
     def __exit__(self, _exc_type: Any, _exc_val: Any, _exc_tb: Any) -> None:
-        """Restore the previously active mock toolkit."""
-        set_mock_toolkit(self._previous)
+        """Restore context even when a tool raises."""
+        if self._token is not None:
+            _toolkit.reset(self._token)

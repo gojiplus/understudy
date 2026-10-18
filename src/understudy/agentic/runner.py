@@ -32,7 +32,13 @@ class AgenticApp(Protocol):
     a step-based interface for autonomous execution.
     """
 
-    def start(self, task: Task, environment: dict[str, Any] | None = None) -> None:
+    def start(
+        self,
+        task: Task,
+        environment: dict[str, Any] | None = None,
+        *,
+        mocks: MockToolkit | None = None,
+    ) -> None:
         """Initialize the agent with a task and environment."""
         ...
 
@@ -71,6 +77,9 @@ def run_agentic(
 
     Returns:
         An AgenticTrace recording everything that happened.
+
+    Raises:
+        ValueError: If mocks are supplied to an adapter without interception.
     """
     trace = AgenticTrace(
         scene_id=scene.id,
@@ -80,9 +89,16 @@ def run_agentic(
 
     logger.info("Running agentic scene: %s", scene.id)
 
-    app.start(task=scene.task, environment=scene.environment)
+    if mocks is not None and not getattr(app, "supports_tool_mocking", False):
+        raise ValueError(
+            "Agentic adapter must intercept tools before execution to accept mocks"
+        )
 
     try:
+        if mocks is None:
+            app.start(task=scene.task, environment=scene.environment)
+        else:
+            app.start(task=scene.task, environment=scene.environment, mocks=mocks)
         step_number = 0
         max_steps = scene.task.max_steps
         max_tokens = scene.task.max_tokens
@@ -99,18 +115,6 @@ def run_agentic(
             start_time = time.perf_counter()
             result = app.step()
             latency_ms = int((time.perf_counter() - start_time) * 1000)
-
-            if mocks and result.step_type == "act" and result.action:
-                handler = mocks.get_handler(result.action)
-                if handler:
-                    try:
-                        result.observation = mocks.call(
-                            result.action, **(result.action_args or {})
-                        )
-                        result.error = None
-                    except Exception as e:
-                        result.error = str(e)
-                        result.observation = None
 
             step = Step(
                 step_number=step_number,

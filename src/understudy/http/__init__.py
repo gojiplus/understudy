@@ -5,6 +5,8 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
 
+from ..execution import AdapterCapabilities, UnsupportedCapabilityError
+from ..instrumentation import ExecutionRecorder
 from ..mocks import MockToolkit
 from ..runner import AgentApp, AgentResponse
 from ..trace import AgentTransfer, ToolCall
@@ -22,6 +24,8 @@ class HTTPApp(AgentApp):
         )
         trace = run(app, scene)
     """
+
+    capabilities = AdapterCapabilities(tools=True, agents=True)
 
     def __init__(
         self,
@@ -50,7 +54,7 @@ class HTTPApp(AgentApp):
         self._session_id: str | None = None
         self._current_agent: str | None = None
 
-    def start(self, mocks: MockToolkit | None = None) -> None:  # noqa: ARG002
+    def start(self, mocks: MockToolkit | None = None) -> None:
         """Create an HTTP client and a remote session.
 
         Args:
@@ -59,7 +63,10 @@ class HTTPApp(AgentApp):
         Raises:
             ImportError: If httpx is not installed.
             RuntimeError: If the server rejects session creation.
+            UnsupportedCapabilityError: If local tool interception is requested.
         """
+        if mocks is not None:
+            raise UnsupportedCapabilityError("Remote HTTP tools cannot be intercepted")
         try:
             import httpx
         except ImportError as e:
@@ -258,8 +265,8 @@ class AgentEngineApp(HTTPApp):
 
 def _parse_events(lines: Iterable[str], current_agent: str | None) -> AgentResponse:
     """Decode ADK API server SSE or Agent Engine newline-delimited events."""
+    recorder = ExecutionRecorder()
     calls: list[ToolCall] = []
-    calls_by_id: dict[str, ToolCall] = {}
     transfers: list[AgentTransfer] = []
     text_parts: list[str] = []
     terminal_state = None
@@ -277,20 +284,26 @@ def _parse_events(lines: Iterable[str], current_agent: str | None) -> AgentRespo
             continue
 
         actions = event.get("actions") or {}
-        for target in (
-            event.get("author"),
-            actions.get("transferToAgent", actions.get("transfer_to_agent")),
-        ):
-            if target and target != current_agent:
-                if current_agent:
-                    transfers.append(
-                        AgentTransfer(
-                            from_agent=current_agent,
-                            to_agent=target,
-                            timestamp=datetime.now(UTC),
-                        )
+        current_agent = event.get("author") or current_agent
+        target = actions.get("transferToAgent", actions.get("transfer_to_agent"))
+        if target and target != current_agent:
+            if current_agent:
+                transfers.append(
+                    AgentTransfer(
+                        from_agent=current_agent,
+                        to_agent=target,
+                        timestamp=datetime.now(UTC),
                     )
-                current_agent = target
+                )
+            current_agent = target
+        node = event.get("nodeInfo", event.get("node_info")) or {}
+        scope = (
+            recorder.observe(
+                node["path"], event.get("invocationId", event.get("invocation_id", ""))
+            )
+            if node.get("path")
+            else None
+        )
         if actions.get("escalate"):
             terminal_state = "agent_ended"
 
@@ -303,27 +316,31 @@ def _parse_events(lines: Iterable[str], current_agent: str | None) -> AgentRespo
                 call = ToolCall(
                     tool_name=function_call["name"],
                     arguments=function_call.get("args") or {},
-                    agent_name=current_agent,
+                    agent_name=event.get("author") or current_agent,
+                    call_id=function_call.get("id"),
+                    agent_path=scope.agent_path if scope else (),
+                    execution_id=scope.id if scope else None,
                 )
                 calls.append(call)
-                if function_call.get("id"):
-                    calls_by_id[function_call["id"]] = call
             function_response = part.get(
                 "functionResponse", part.get("function_response")
             )
             if function_response:
-                if function_response.get("id"):
-                    matched = calls_by_id.get(function_response["id"])
-                else:
-                    matched = next(
-                        (
-                            call
-                            for call in calls
-                            if call.tool_name == function_response.get("name")
-                            and call.result is None
-                        ),
-                        None,
-                    )
+                matched = next(
+                    (
+                        call
+                        for call in calls
+                        if call.execution_id == (scope.id if scope else None)
+                        and call.agent_name == (event.get("author") or current_agent)
+                        and (
+                            call.call_id == function_response["id"]
+                            if function_response.get("id")
+                            else call.tool_name == function_response.get("name")
+                        )
+                        and call.result is None
+                    ),
+                    None,
+                )
                 if matched is not None:
                     matched.result = function_response.get("response")
 
@@ -338,7 +355,9 @@ def _parse_events(lines: Iterable[str], current_agent: str | None) -> AgentRespo
             usage.get("thoughtsTokenCount", usage.get("thoughts_token_count")) or 0
         )
 
+    recorder.finish()
     return AgentResponse(
+        executions=recorder.executions,
         content=" ".join(text_parts),
         tool_calls=calls,
         terminal_state=terminal_state,

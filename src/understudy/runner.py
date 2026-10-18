@@ -2,6 +2,7 @@
 
 import logging
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -9,7 +10,7 @@ from typing import Any, Protocol
 from .batch import BatchExecutor
 from .mocks import MockToolkit
 from .models import Scene
-from .trace import StateSnapshot, ToolCall, Trace, Turn, TurnMetrics
+from .trace import AgentExecution, StateSnapshot, ToolCall, Trace, Turn, TurnMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class AgentResponse:
         output_tokens: int = 0,
         thinking_tokens: int = 0,
         state_snapshot: dict[str, Any] | None = None,
+        executions: list[AgentExecution] | None = None,
     ):
         """Capture the agent's reply text, tool calls, and usage stats."""
         self.content = content
@@ -59,6 +61,7 @@ class AgentResponse:
         self.output_tokens = output_tokens
         self.thinking_tokens = thinking_tokens
         self.state_snapshot = state_snapshot
+        self.executions = executions or []
 
 
 class LiteLLMBackend:
@@ -110,10 +113,15 @@ def run(
 
     Returns:
         A Trace recording everything that happened.
+
+    Raises:
+        UnsupportedCapabilityError: If mocks cannot be intercepted by this adapter.
     """
+    from .execution import UnsupportedCapabilityError, capabilities
     from .simulator import Simulator
 
-    # mocks are optional - developer provides them if needed
+    if mocks is not None and not capabilities(app).interception:
+        raise UnsupportedCapabilityError("Adapter cannot intercept tools")
 
     # set up simulator
     if simulator_backend is None:
@@ -129,14 +137,15 @@ def run(
     trace = Trace(
         scene_id=scene.id,
         started_at=datetime.now(UTC),
+        tools_observed=capabilities(app).tools,
+        agents_observed=capabilities(app).agents,
     )
 
     logger.info("Running scene: %s", scene.id)
 
     # start the agent
-    app.start(mocks=mocks)
-
     try:
+        app.start(mocks=mocks)
         # send starting prompt
         history: list[dict[str, str]] = []
         user_message = scene.starting_prompt
@@ -189,6 +198,8 @@ def run(
                         timestamp=datetime.now(UTC),
                     )
                 )
+
+            trace.executions.extend(response.executions)
 
             # collect agent transfers
             if response.agent_transfers:
@@ -268,14 +279,22 @@ class _SimulationExecutor(BatchExecutor[_SimulationTask, Trace]):
 
     def __init__(
         self,
-        app: AgentApp,
+        app: AgentApp | Callable[[], AgentApp],
         mocks: MockToolkit | None,
         simulator_model: str,
         storage: Any,
         tags: dict[str, str] | None,
         parallel: int = 1,
+        mocks_factory: Callable[[], MockToolkit] | None = None,
     ):
         super().__init__(parallel)
+        if parallel > 1 and not callable(app):
+            raise ValueError(
+                "Parallel runs require an app factory for isolated sessions"
+            )
+        if mocks is not None and (parallel > 1 or mocks_factory is not None):
+            raise ValueError("Use mocks_factory for isolated parallel mocks")
+        self.mocks_factory = mocks_factory
         self.app = app
         self.mocks = mocks
         self.simulator_model = simulator_model
@@ -284,9 +303,9 @@ class _SimulationExecutor(BatchExecutor[_SimulationTask, Trace]):
 
     def execute_one(self, item: _SimulationTask) -> Trace:
         trace = simulate(
-            app=self.app,
+            app=self.app() if callable(self.app) else self.app,
             scene=item.scene,
-            mocks=self.mocks,
+            mocks=self.mocks_factory() if self.mocks_factory else self.mocks,
             simulator_model=self.simulator_model,
         )
         if self.storage:
@@ -300,7 +319,7 @@ class _SimulationExecutor(BatchExecutor[_SimulationTask, Trace]):
 
 
 def simulate_batch(
-    app: AgentApp,
+    app: AgentApp | Callable[[], AgentApp],
     scenes: list[Scene] | str | Path,
     simulator_model: str = "gpt-4o",
     n_sims: int = 1,
@@ -308,6 +327,7 @@ def simulate_batch(
     mocks: MockToolkit | None = None,
     output: str | Path | None = None,
     tags: dict[str, str] | None = None,
+    mocks_factory: Callable[[], MockToolkit] | None = None,
 ) -> list[Trace]:
     """Run multiple simulations and return traces (no evaluation).
 
@@ -320,6 +340,7 @@ def simulate_batch(
         mocks: Optional mock toolkit for tool responses.
         output: Optional path to save trace files.
         tags: Optional metadata tags.
+        mocks_factory: Creates isolated handlers and state for each simulation.
 
     Returns:
         List of Trace objects from all simulations.
@@ -358,6 +379,7 @@ def simulate_batch(
         storage=storage,
         tags=tags,
         parallel=parallel,
+        mocks_factory=mocks_factory,
     )
 
     return executor.run(tasks)

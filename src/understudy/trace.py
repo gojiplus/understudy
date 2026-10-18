@@ -72,6 +72,9 @@ class ToolCall(BaseModel):
     timestamp: datetime | None = None
     error: str | None = None
     agent_name: str | None = None
+    call_id: str | None = None
+    execution_id: str | None = None
+    agent_path: tuple[str, ...] = ()
 
 
 class AgentTransfer(BaseModel):
@@ -92,6 +95,17 @@ class Turn(BaseModel):
     agent_name: str | None = None
 
 
+class AgentExecution(BaseModel):
+    """One invocation, distinguished from other invocations of the same agent."""
+
+    id: str
+    agent_name: str
+    agent_path: tuple[str, ...] = ()
+    parent_id: str | None = None
+    status: str = "running"
+    error: str | None = None
+
+
 class Trace(BaseModel):
     """The full execution trace of a rehearsal.
 
@@ -105,12 +119,17 @@ class Trace(BaseModel):
     finished_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     agent_transfers: list[AgentTransfer] = Field(default_factory=list)
+    executions: list[AgentExecution] = Field(default_factory=list)
+    tools_observed: bool = True
+    agents_observed: bool = True
     metrics: TraceMetrics = Field(default_factory=TraceMetrics)
     state_snapshots: list[StateSnapshot] = Field(default_factory=list)
 
     @property
     def tool_calls(self) -> list[ToolCall]:
         """All tool calls across all turns, in order."""
+        if not self.tools_observed:
+            raise ValueError("This adapter does not observe tool calls")
         calls = []
         for turn in self.turns:
             calls.extend(turn.tool_calls)
@@ -178,17 +197,22 @@ class Trace(BaseModel):
 
     def agents_invoked(self) -> list[str]:
         """Get list of unique agent names that participated in the conversation."""
-        agents = set()
+        if not self.agents_observed:
+            raise ValueError("This adapter does not observe agent identity")
+        agents = {execution.agent_name for execution in self.executions}
         for turn in self.turns:
             if turn.agent_name:
                 agents.add(turn.agent_name)
-        for call in self.tool_calls:
-            if call.agent_name:
-                agents.add(call.agent_name)
+        if self.tools_observed:
+            for call in self.tool_calls:
+                if call.agent_name:
+                    agents.add(call.agent_name)
         return sorted(agents)
 
     def agent_called(self, agent: str, tool: str) -> bool:
         """Check if a specific agent called a specific tool."""
+        if not self.agents_observed:
+            raise ValueError("This adapter does not observe agent identity")
         return any(
             call.agent_name == agent and call.tool_name == tool
             for call in self.tool_calls
@@ -196,4 +220,6 @@ class Trace(BaseModel):
 
     def calls_by_agent(self, agent: str) -> list[ToolCall]:
         """Get all tool calls made by a specific agent."""
+        if not self.agents_observed:
+            raise ValueError("This adapter does not observe agent identity")
         return [c for c in self.tool_calls if c.agent_name == agent]

@@ -568,10 +568,7 @@ def simulate_command(
 
     agent_app = import_object(app)
 
-    mocks = None
-    if mocks_path:
-        mocks_fn = import_object(mocks_path)
-        mocks = mocks_fn()
+    mocks_factory = import_object(mocks_path) if mocks_path else None
 
     tags_dict: dict[str, str] = {}
     for tag in tags:
@@ -583,8 +580,8 @@ def simulate_command(
         tags_dict[key] = value
 
     click.echo(f"Running simulations with model: {simulator_model}")
-    if mocks:
-        click.echo(f"Using mocks: {mocks.available_tools}")
+    if mocks_factory:
+        click.echo(f"Using mocks: {mocks_path}")
 
     traces = simulate_batch(
         app=agent_app,
@@ -592,7 +589,7 @@ def simulate_command(
         simulator_model=simulator_model,
         n_sims=n_sims,
         parallel=parallel,
-        mocks=mocks,
+        mocks_factory=mocks_factory,
         output=output,
         tags=tags_dict or None,
     )
@@ -784,10 +781,7 @@ def run_command(
 
     agent_app = import_object(app)
 
-    mocks = None
-    if mocks_path:
-        mocks_fn = import_object(mocks_path)
-        mocks = mocks_fn()
+    mocks_factory = import_object(mocks_path) if mocks_path else None
 
     tags_dict: dict[str, str] = {}
     for tag in tags:
@@ -814,8 +808,8 @@ def run_command(
     click.echo(f"Running with simulator model: {simulator_model}")
     if n_sims > 1:
         click.echo(f"Simulations per scene: {n_sims}")
-    if mocks:
-        click.echo(f"Using mocks: {mocks.available_tools}")
+    if mocks_factory:
+        click.echo(f"Using mocks: {mocks_path}")
 
     results = suite.run(
         app=agent_app,
@@ -823,7 +817,7 @@ def run_command(
         storage=storage,
         tags=tags_dict or None,
         n_sims=n_sims,
-        mocks=mocks,
+        mocks_factory=mocks_factory,
         simulator_model=simulator_model,
     )
 
@@ -1458,6 +1452,103 @@ def evaluate_agentic_command(
     else:
         click.echo("\nSome checks failed.")
         sys.exit(1)
+
+
+@main.command("run-turn")
+@click.option("--factory", required=True, help="Fresh app factory: module:attribute")
+@click.option("--message", required=True)
+@click.option("--checkpoint", type=click.Path(exists=True, path_type=Path))
+@click.option("--fixture", type=click.Path(exists=True, path_type=Path))
+@click.option("--state-patch", type=click.Path(exists=True, path_type=Path))
+@click.option("--mocks-factory", help="Fresh mock toolkit factory: module:attribute")
+@click.option("--expectations", type=click.Path(exists=True, path_type=Path))
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option("--checkpoint-output", type=click.Path(path_type=Path))
+@click.option(
+    "--runs", type=click.Path(path_type=Path), help="Also save for HTML reports"
+)
+def run_turn_command(
+    factory,
+    message,
+    checkpoint,
+    fixture,
+    state_patch,
+    mocks_factory,
+    expectations,
+    output,
+    checkpoint_output,
+    runs,
+):
+    """Restore state, execute one input, and assert only against new activity."""
+    import json
+
+    from .check import check
+    from .execution import Checkpoint, StateFixture, run_turn
+    from .models import Expectations, Persona, Scene
+
+    try:
+        result = run_turn(
+            import_object(factory),
+            message,
+            checkpoint=Checkpoint.load(checkpoint) if checkpoint else None,
+            fixture=StateFixture.model_validate_json(fixture.read_text())
+            if fixture
+            else None,
+            state_patch=json.loads(state_patch.read_text()) if state_patch else None,
+            mocks_factory=import_object(mocks_factory) if mocks_factory else None,
+            capture_checkpoint=checkpoint_output is not None,
+        )
+        expected = (
+            Expectations.model_validate_json(expectations.read_text())
+            if expectations
+            else Expectations()
+        )
+        checked = check(result.trace, expected)
+        output.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+        if checkpoint_output and result.checkpoint:
+            result.checkpoint.save(checkpoint_output)
+        if runs:
+            scene = Scene(
+                id="single-turn",
+                starting_prompt=message,
+                conversation_plan="",
+                persona=Persona(description="Explicit next-turn input"),
+                expectations=expected,
+            )
+            result.trace.metadata["state_changes"] = result.state_changes
+            RunStorage(path=runs).save(result.trace, scene, check_result=checked)
+        click.echo(checked.summary())
+    except (ValueError, TypeError, RuntimeError) as error:
+        raise click.ClickException(str(error)) from error
+    if not checked.passed:
+        raise click.ClickException("Next-turn assertions failed")
+
+
+@main.command("replay-until")
+@click.option("--factory", required=True)
+@click.option("--trace", required=True, type=click.Path(exists=True, path_type=Path))
+@click.option("--after-turn", required=True, type=click.IntRange(min=0))
+@click.option("--mocks-factory")
+@click.option("--allow-divergence", is_flag=True)
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+def replay_until_command(
+    factory, trace, after_turn, mocks_factory, allow_divergence, output
+):
+    """Re-execute a recorded prefix and capture a new checkpoint."""
+    from .execution import replay_to
+    from .replay import load_trace
+
+    try:
+        checkpoint = replay_to(
+            import_object(factory),
+            load_trace(trace),
+            after_turn,
+            mocks_factory=import_object(mocks_factory) if mocks_factory else None,
+            require_match=not allow_divergence,
+        )
+        checkpoint.save(output)
+    except (ValueError, TypeError, RuntimeError) as error:
+        raise click.ClickException(str(error)) from error
 
 
 if __name__ == "__main__":

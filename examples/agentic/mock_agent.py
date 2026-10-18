@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from understudy import MockToolkit
 from understudy.agentic import StepResult, Task
 
 
@@ -12,6 +13,8 @@ class MockAgenticApp:
     a real LLM-powered agent. Behaviors are defined as sequences of steps
     that the agent will execute for each task description.
     """
+
+    supports_tool_mocking = True
 
     def __init__(self, behaviors: dict[str, list[dict[str, Any]]]):
         """Initialize with predefined behaviors.
@@ -29,8 +32,15 @@ class MockAgenticApp:
         self._outcome = "pending"
         self._state: dict[str, Any] = {}
 
-    def start(self, task: Task, environment: dict[str, Any] | None = None) -> None:
+    def start(
+        self,
+        task: Task,
+        environment: dict[str, Any] | None = None,
+        *,
+        mocks: MockToolkit | None = None,
+    ) -> None:
         """Initialize the agent with a task."""
+        self.mocks = mocks
         self.task = task
         self.environment = environment or {}
         self.steps = self.behaviors.get(task.description, [])
@@ -46,7 +56,11 @@ class MockAgenticApp:
             self._outcome = "success"
             return StepResult(step_type="observe", observation="Task completed")
 
-        step_data = self.steps[self.current_step]
+        step_data = dict(self.steps[self.current_step])
+        if self.mocks is not None and step_data.get("action"):
+            handler = self.mocks.resolve(step_data["action"])
+            if handler is not None:
+                step_data["observation"] = handler(**step_data.get("action_args", {}))
         self.current_step += 1
 
         if "state_update" in step_data:
