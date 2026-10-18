@@ -82,7 +82,11 @@ mocks = MockToolkit()
 
 @mocks.handle("lookup_order")
 def lookup_order(order_id: str) -> dict:
-    return {"order_id": order_id, "items": [{"sku": "BACKPACK-01", "quantity": 1}], "status": "delivered"}
+    return {
+        "order_id": order_id,
+        "items": [{"sku": "BACKPACK-01", "quantity": 1}],
+        "status": "delivered",
+    }
 
 
 @mocks.handle("create_return")
