@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- HTTP adapters create remote sessions and use the documented ADK and Agent
+  Engine request formats. Streamed tool results, transfers, termination, and
+  token usage are captured from actual ADK event shapes.
+- Supplied Agent Engine credentials are refreshed when invalid.
+- ADK mock callbacks are restored after a run, and transfers are reported once
+  per turn. LangGraph mocks are scoped to graph execution without modifying
+  caller configuration, and standardized token usage is recorded.
+
 ### Changed
+
+- Measure package-only line and branch coverage before pytest plugin imports,
+  with an 80% floor and deterministic adapter and plugin regression tests.
 
 - Adopted the py-canon fleet standard: shared reusable CI/docs/release
   workflows, canon ruff/pyright/pydoclint configuration, and a
