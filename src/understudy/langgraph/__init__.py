@@ -74,6 +74,8 @@ class LangGraphApp(AgentApp):
         self.thread_id: str | None = None
         self._loop: Any = None
         self._mocks: MockToolkit | None = None
+        self._message_history: dict[tuple[str, ...], set[str]] = {}
+        self._checkpoint_namespaces: set[str] = {""}
 
     def start(self, mocks: MockToolkit | None = None) -> None:
         """Initialize the LangGraph session."""
@@ -89,6 +91,8 @@ class LangGraphApp(AgentApp):
             raise UnsupportedCapabilityError(
                 "Declare tool_interception=True after instrumenting the tools"
             )
+        self._message_history.clear()
+        self._checkpoint_namespaces = {""}
         self._loop = asyncio.Runner()
         self.thread_id = str(uuid.uuid4())
         self._mocks = mocks
@@ -137,23 +141,25 @@ class LangGraphApp(AgentApp):
         from .instrumentation import GraphRecorder
 
         recorder = GraphRecorder()
-        seen_messages = set()
-        if self.capabilities.state:
-            try:
-                previous = self.graph.get_state(config)
-                if isinstance(previous.values, dict):
-                    seen_messages.update(
-                        m.id
-                        for m in previous.values.get(self.input_key, [])
-                        if getattr(m, "id", None)
-                    )
-            except (ValueError, AttributeError):
-                pass
+        seen_messages: dict[tuple[str, ...], set[str]] = {}
+        emitted_messages: dict[str, list[tuple[tuple[str, ...], Any]]] = {}
+        latest_values = None
         config["callbacks"] = [*(config.get("callbacks") or []), recorder]
         with MockableToolContext(self._mocks or get_mock_toolkit()):
-            async for namespace, chunk in self.graph.astream(
-                input_state, config=config, stream_mode="updates", subgraphs=True
+            modes = (
+                ["updates", "checkpoints"]
+                if self.capabilities.checkpoints
+                else ["updates"]
+            )
+            async for namespace, mode, chunk in self.graph.astream(
+                input_state, config=config, stream_mode=modes, subgraphs=True
             ):
+                if mode == "checkpoints":
+                    checkpoint_ns = chunk["config"]["configurable"]["checkpoint_ns"]
+                    self._checkpoint_namespaces.add(checkpoint_ns)
+                    if not checkpoint_ns:
+                        latest_values = chunk["values"]
+                    continue
                 for node, updates in chunk.items():
                     if node == "__interrupt__":
                         terminal_state = "interrupted"
@@ -165,10 +171,26 @@ class LangGraphApp(AgentApp):
                         messages = [messages]
 
                     for msg in messages:
-                        if msg.id and msg.id in seen_messages:
-                            continue
                         if msg.id:
-                            seen_messages.add(msg.id)
+                            local_ids = seen_messages.setdefault(namespace, set())
+                            if msg.id in local_ids:
+                                continue
+                            local_ids.add(msg.id)
+                            path = tuple(part.split(":")[0] for part in namespace)
+                            if any(
+                                msg.id in self._message_history.get(path[:i], ())
+                                for i in range(len(path) + 1)
+                            ):
+                                continue
+                            descendants = emitted_messages.setdefault(msg.id, [])
+                            if any(
+                                len(child) > len(namespace)
+                                and child[: len(namespace)] == namespace
+                                and previous == msg
+                                for child, previous in descendants
+                            ):
+                                continue
+                            descendants.append((namespace, msg))
                         if isinstance(msg, AIMessage):
                             if msg.tool_calls:
                                 for tc in msg.tool_calls:
@@ -240,12 +262,18 @@ class LangGraphApp(AgentApp):
                                             call.result = msg.content
                                             break
 
+        for namespace, ids in seen_messages.items():
+            path = tuple(part.split(":")[0] for part in namespace)
+            self._message_history.setdefault(path, set()).update(ids)
+
         # capture state snapshot from graph and detect END node
         state_snapshot = None
         try:
-            graph_state = self.graph.get_state(config)
-            if graph_state and hasattr(graph_state, "values"):
-                state_values = graph_state.values
+            if latest_values is None:
+                graph_state = self.graph.get_state(config)
+                latest_values = getattr(graph_state, "values", None)
+            if latest_values is not None:
+                state_values = latest_values
                 if isinstance(state_values, dict):
                     terminal_state = state_values.get("terminal_state", terminal_state)
                     state_snapshot = {
@@ -271,6 +299,8 @@ class LangGraphApp(AgentApp):
         """Clean up the LangGraph session."""
         self.thread_id = None
         self._mocks = None
+        self._message_history.clear()
+        self._checkpoint_namespaces.clear()
         if self._loop is not None:
             self._loop.close()
             self._loop = None
@@ -307,19 +337,21 @@ class LangGraphApp(AgentApp):
         from langchain_core.messages import messages_to_dict
 
         config = self._config()
-        if self.graph.get_state(config).next:
+        snapshot = self.graph.get_state(config)
+        if snapshot.next:
             raise UnsupportedCapabilityError(
                 "Checkpoint capture requires a completed turn; "
                 "a node or interrupt is still pending"
             )
         saver = self.graph.checkpointer
         records = []
-        seen = set()
-        for item in saver.list(config):
-            namespace = item.config["configurable"].get("checkpoint_ns", "")
-            if namespace in seen:
+        for namespace in sorted(self._checkpoint_namespaces):
+            query = self._config()
+            query["configurable"].pop("checkpoint_id", None)
+            query["configurable"]["checkpoint_ns"] = namespace
+            item = saver.get_tuple(query)
+            if item is None:
                 continue
-            seen.add(namespace)
             kind, data = saver.serde.dumps_typed(item.checkpoint)
             if kind not in {"json", "msgpack"}:
                 raise UnsupportedCapabilityError(
@@ -333,7 +365,7 @@ class LangGraphApp(AgentApp):
                     "metadata": item.metadata,
                 }
             )
-        state = self.get_state()
+        state = deepcopy(dict(snapshot.values))
         if self.input_key in state:
             state[self.input_key] = messages_to_dict(state[self.input_key])
         return Checkpoint(
@@ -349,6 +381,7 @@ class LangGraphApp(AgentApp):
         self.validate_checkpoint(checkpoint)
         saver = self.graph.checkpointer
         for record in checkpoint.payload["records"]:
+            self._checkpoint_namespaces.add(record["namespace"])
             if record["kind"] not in {"json", "msgpack"}:
                 raise ValueError("Unsupported checkpoint serialization")
             data = saver.serde.loads_typed(
@@ -357,6 +390,14 @@ class LangGraphApp(AgentApp):
             config = self._config()
             config["configurable"]["checkpoint_ns"] = record["namespace"]
             saver.put(config, data, record["metadata"], data["channel_versions"])
+            path = tuple(
+                part.split(":")[0] for part in record["namespace"].split("|") if part
+            )
+            self._message_history.setdefault(path, set()).update(
+                message.id
+                for message in data["channel_values"].get(self.input_key, [])
+                if getattr(message, "id", None)
+            )
 
     def inject(self, fixture: StateFixture) -> None:
         """Seed values and messages through the graph's native state writers."""
@@ -390,7 +431,17 @@ class LangGraphApp(AgentApp):
                         )
             state[self.input_key] = messages
         self.graph.update_state(self._config(), state, as_node="__start__")
+        self._remember_root_messages()
 
     def patch_state(self, patch: dict[str, Any]) -> None:
         """Apply state updates through native reducers."""
         self.graph.update_state(self._config(), deepcopy(patch), as_node="__start__")
+        self._remember_root_messages()
+
+    def _remember_root_messages(self) -> None:
+        state = self.graph.get_state(self._config()).values
+        self._message_history.setdefault((), set()).update(
+            message.id
+            for message in state.get(self.input_key, [])
+            if getattr(message, "id", None)
+        )

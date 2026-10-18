@@ -149,3 +149,37 @@ def test_parallel_cli_creates_independent_mock_state(tmp_path, monkeypatch):
         runs = storage.load_all()
         assert len(runs) == 4
         assert all(run["trace"].turns[-1].content == "1" for run in runs)
+
+
+def test_installed_commands_import_project_local_factories(tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    tests = str(Path(__file__).parent)
+    (tmp_path / "local_agent.py").write_text(
+        f"import sys\nsys.path.insert(0, {tests!r})\n"
+        "from test_execution import CounterApp\nfactory = CounterApp\n"
+    )
+    (tmp_path / "trace.json").write_text('{"scene_id": "empty", "turns": []}')
+    executable = Path(sys.executable).with_name("understudy")
+    for command in [
+        ["run-turn", "--message", "hello"],
+        ["replay-until", "--trace", "trace.json", "--after-turn", "0"],
+    ]:
+        result = subprocess.run(  # noqa: S603
+            [
+                str(executable),
+                *command,
+                "--factory",
+                "local_agent:factory",
+                "--output",
+                "result.json",
+            ],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert (tmp_path / "result.json").is_file()

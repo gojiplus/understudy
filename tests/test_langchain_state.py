@@ -89,3 +89,44 @@ def test_async_tool_and_mock_return_values():
     result = run_turn(app, "write")
     assert real == ["x"]
     assert result.trace.tool_calls[0].result == "real"
+
+
+@pytest.mark.parametrize(
+    "value", ["approved", [{"type": "text", "text": "approved"}], {"approved": True}]
+)
+def test_mock_results_match_native_tool_content(value):
+    from langchain_core.messages import ToolMessage
+
+    def lookup() -> object:
+        """Return an approval result."""
+        return value
+
+    def app():
+        return LangChainApp(
+            ToolModel(
+                responses=[
+                    AIMessage(
+                        content="",
+                        tool_calls=[{"name": "lookup", "args": {}, "id": "one"}],
+                    ),
+                    AIMessage(content="done"),
+                ]
+            ),
+            [lookup],
+        )
+
+    def mocks():
+        toolkit = MockToolkit()
+        toolkit.handle("lookup")(lambda: value)
+        return toolkit
+
+    native = run_turn(app, "lookup")
+    mocked = run_turn(app, "lookup", mocks_factory=mocks)
+    native_message = next(
+        m for m in native.state_after["messages"] if isinstance(m, ToolMessage)
+    )
+    mocked_message = next(
+        m for m in mocked.state_after["messages"] if isinstance(m, ToolMessage)
+    )
+    assert mocked_message.content == native_message.content
+    assert mocked_message.name == native_message.name

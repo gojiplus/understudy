@@ -170,45 +170,6 @@ def suite_results(request: pytest.FixtureRequest, app, mocks) -> Any:
     )
 
 
-class AssertionHelpers:
-    """Helper methods for trace assertions.
-
-    These are available on the trace object for convenient assertions.
-    """
-
-    @staticmethod
-    def assert_called(trace: Trace, tool_name: str, **kwargs: Any) -> None:
-        """Assert that a tool was called with optional argument matching."""
-        if not trace.called(tool_name, **kwargs):
-            calls = [c.tool_name for c in trace.tool_calls]
-            msg = f"Expected {tool_name} to be called"
-            if kwargs:
-                msg += f" with {kwargs}"
-            msg += f". Actual calls: {calls}"
-            pytest.fail(msg)
-
-    @staticmethod
-    def assert_not_called(trace: Trace, tool_name: str) -> None:
-        """Assert that a tool was NOT called."""
-        if trace.called(tool_name):
-            pytest.fail(f"Expected {tool_name} NOT to be called, but it was")
-
-    @staticmethod
-    def assert_tool_sequence(trace: Trace, expected: list[str]) -> None:
-        """Assert that tools were called in a specific sequence."""
-        actual = trace.call_sequence()
-        if actual != expected:
-            pytest.fail(f"Expected tool sequence {expected}, got {actual}")
-
-    @staticmethod
-    def assert_terminal_state(trace: Trace, expected: str) -> None:
-        """Assert the terminal state of the conversation."""
-        if trace.terminal_state != expected:
-            pytest.fail(
-                f"Expected terminal state '{expected}', got '{trace.terminal_state}'"
-            )
-
-
 @pytest.fixture
 def turn_runner(app_factory):
     """Run isolated next-turn tests using the project's app_factory fixture."""

@@ -208,7 +208,7 @@ class TestAssertionHelpers:
 
     def test_assert_called_fails(self):
         trace = self._make_trace([])
-        with pytest.raises(pytest.fail.Exception):
+        with pytest.raises(AssertionError):
             AssertionHelpers.assert_called(trace, "lookup_order")
 
     def test_assert_not_called_passes(self):
@@ -225,7 +225,7 @@ class TestAssertionHelpers:
                 ToolCall(tool_name="lookup_order", arguments={}),
             ]
         )
-        with pytest.raises(pytest.fail.Exception):
+        with pytest.raises(AssertionError):
             AssertionHelpers.assert_not_called(trace, "lookup_order")
 
     def test_assert_tool_sequence_passes(self):
@@ -244,7 +244,7 @@ class TestAssertionHelpers:
                 ToolCall(tool_name="lookup_order", arguments={}),
             ]
         )
-        with pytest.raises(pytest.fail.Exception):
+        with pytest.raises(AssertionError):
             AssertionHelpers.assert_tool_sequence(
                 trace, ["lookup_order", "create_return"]
             )
@@ -255,7 +255,7 @@ class TestAssertionHelpers:
 
     def test_assert_terminal_state_fails(self):
         trace = self._make_trace()
-        with pytest.raises(pytest.fail.Exception):
+        with pytest.raises(AssertionError):
             AssertionHelpers.assert_terminal_state(trace, "failed")
 
 

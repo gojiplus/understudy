@@ -41,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool-call IDs are scoped to native invocations, preserving distinct results
   when parallel subagents reuse an ID. ADK callbacks are left intact.
 - Installation instructions and rubric imports match the supported package API.
+- Importing the runtime no longer requires pytest. Assertion helpers raise normal
+  assertion errors; pytest fixtures remain in the plugin.
+- Installed next-turn CLI commands import factories from the current project.
+- LangChain mock responses preserve native strings, content blocks, and tool names.
+- Private child history is excluded from new-turn traces, while sibling message IDs
+  remain independent. Checkpoint export fetches only the latest snapshot per
+  namespace, avoiding repeated deserialization of all historical snapshots.
 
 Checkpoints include managed runtime and mock-service state, not external systems
 or model randomness. Restoring inside an unfinished execution is not supported.
