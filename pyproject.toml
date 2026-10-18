@@ -132,3 +132,6 @@ dev = [
     "pyright>=1.1.390",
     "pydoclint>=0.5",
 ]
+
+[tool.codespell]
+builtin = "clear,rare,en-GB_to_en-US"

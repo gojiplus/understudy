@@ -6,7 +6,7 @@ Understudy supports two distinct evaluation paradigms for AI agents:
 
 ### Conversational Agent Evaluation
 
-Simulate multi-turn conversations with personas to test dialogue agents.
+Simulate multi-turn conversations with personas to test dialog agents.
 
 - **Use case**: Customer service bots, assistants, chatbots
 - **Examples**: `adk/`, `langgraph/`
@@ -137,7 +137,7 @@ expectations:
 
 | Aspect | Conversational | Agentic |
 |--------|---------------|---------|
-| **Interaction** | Multi-turn dialogue | Single task execution |
+| **Interaction** | Multi-turn dialog | Single task execution |
 | **Simulated party** | User with persona | None (agent acts alone) |
 | **Scene defines** | Conversation plan | Task and goal |
 | **Assert on** | `trace.called("tool")` | `trace.performed("action")` |

@@ -23,7 +23,7 @@ The key insight: **assert against the trace, not the prose**. Don't check what t
 ## Two Evaluation Paradigms
 
 ### Conversational Agent Evaluation
-Simulate multi-turn conversations with personas to test dialogue agents.
+Simulate multi-turn conversations with personas to test dialog agents.
 - Use case: Customer service bots, assistants, chatbots
 - Assert on tool calls: `trace.called("tool_name")`
 

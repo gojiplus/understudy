@@ -243,7 +243,7 @@ class ReportGenerator:
                     before = query.get("before", [None])[0]
                     after = query.get("after", [None])[0]
                     # Written out rather than `all([tag, before, after])`:
-                    # identical behaviour, and it narrows away the `| None` so
+                    # identical behavior, and it narrows away the `| None` so
                     # the call below is checkable.
                     if not tag or not before or not after:
                         self.send_error(
