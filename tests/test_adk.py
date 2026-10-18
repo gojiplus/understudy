@@ -1,5 +1,6 @@
 """Exercise ADK's event contract without calling a model."""
 
+import asyncio
 import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -7,7 +8,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from understudy import MockToolkit
-from understudy.adk import ADKApp, _create_mock_callback, _load_dotenv
+from understudy.adk import ADKApp, _load_dotenv
 
 adk = pytest.importorskip("google.adk")
 events = pytest.importorskip("google.adk.events")
@@ -20,7 +21,12 @@ def session(monkeypatch):
     service.create_session = AsyncMock(
         return_value=SimpleNamespace(id="session", state={"order": "pending"})
     )
+    service.get_session = AsyncMock(
+        side_effect=lambda **kw: service.create_session.return_value
+    )
     runner = Mock()
+    runner.close = AsyncMock()
+    monkeypatch.setattr("google.adk.apps.App", Mock())
     monkeypatch.setattr(adk, "Runner", Mock(return_value=runner))
     monkeypatch.setattr(
         "google.adk.sessions.InMemorySessionService", Mock(return_value=service)
@@ -134,9 +140,16 @@ def test_transfers_are_per_turn(session):
     runner, _ = session
     app = ADKApp(SimpleNamespace(name="assistant"))
     app.start()
-    stream_events(runner, events.Event(author="specialist"))
+    stream_events(
+        runner,
+        events.Event(
+            author="assistant",
+            actions=events.EventActions(transfer_to_agent="specialist"),
+        ),
+    )
     first = app.send("transfer")
     assert len(first.agent_transfers) == 1
+    stream_events(runner, events.Event(author="specialist"))
     second = app.send("continue")
     assert second.agent_transfers == []
     assert len(first.agent_transfers) == 1
@@ -158,34 +171,18 @@ def test_empty_author_and_repeated_transfer(session):
     response = app.send("hello")
     assert response.agent_name == "first"
     assert response.agent_transfers == []
-    assert response.state_snapshot is None
+    assert response.state_snapshot == {}
     app.stop()
 
 
-def test_mock_callback_restored(session):
+def test_callbacks_are_not_replaced(session):
     original = Mock()
     agent = SimpleNamespace(name="assistant", before_tool_callback=original)
-    mocks = MockToolkit()
-    mocks.handle("lookup")(lambda order_id: {"id": order_id})
     app = ADKApp(agent)
-    app.start(mocks)
-    assert agent.before_tool_callback(
-        tool=SimpleNamespace(name="lookup"), args={"order_id": 12}, tool_context=None
-    ) == {"id": 12}
+    app.start(MockToolkit())
+    assert agent.before_tool_callback is original
     app.stop()
     assert agent.before_tool_callback is original
-
-
-def test_mock_callback_errors_and_fallbacks():
-    def broken():
-        raise ValueError("tool failed")
-
-    mocks = MockToolkit()
-    mocks.handle("broken")(broken)
-    callback = _create_mock_callback(mocks)
-    assert callback(broken, {}, None) == {"error": "tool failed"}
-    assert callback(SimpleNamespace(name="unregistered"), {}, None) is None
-    assert _create_mock_callback(None)(broken, {}, None) is None
 
 
 @pytest.mark.parametrize(
@@ -194,7 +191,11 @@ def test_mock_callback_errors_and_fallbacks():
 def test_missing_dependencies(monkeypatch, module, operation):
     monkeypatch.setitem(sys.modules, module, None)
     app = ADKApp(SimpleNamespace(name="assistant"))
-    action = app.start if operation == "start" else lambda: app.send("hello")
+    action = (
+        app.start
+        if operation == "start"
+        else lambda: asyncio.run(app._send_async("hello"))
+    )
     with pytest.raises(ImportError, match=r"understudy\[adk\]"):
         action()
 

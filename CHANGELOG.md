@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Isolated next-turn tests with synthetic state/history, native completed-turn
+  checkpoints, state patches, prefix replay, and fresh app/mock factories.
+- ADK app-wide tool interception and native nested invocation paths; LangGraph
+  checkpoint forks and nested graph tracing; a LangChain create_agent adapter.
+- `turn_runner` pytest fixture, `run-turn` and `replay-until` commands, and report
+  details for next-turn boundaries, state changes, and agent invocations.
+
+### Changed
+- LangGraph mock context is isolated per execution. Parallel suites and batches
+  require app factories. Graph completion no longer ends a conversation.
+- Custom agentic adapters must intercept mocks before action execution; the runner
+  no longer changes observations after a real action has run.
+- Unsupported state, interception, or observation requests fail explicitly.
+
+
 ### Fixed
 
 - HTTP adapters create remote sessions and use the documented ADK and Agent

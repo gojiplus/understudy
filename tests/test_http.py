@@ -228,9 +228,7 @@ def test_empty_malformed_events_and_implicit_transfer(transport, engine):
     assert response.content == ""
     assert response.tool_calls == []
     assert response.terminal_state is None
-    assert [(t.from_agent, t.to_agent) for t in response.agent_transfers] == [
-        ("first", "second")
-    ]
+    assert response.agent_transfers == []
     app.stop()
 
 
@@ -283,3 +281,34 @@ def test_credentials_errors(monkeypatch):
     monkeypatch.setitem(sys.modules, "google.auth", None)
     with pytest.raises(ImportError, match="google-auth"):
         app._get_access_token()
+
+
+def test_parallel_tool_ids_are_scoped_to_native_invocations():
+    from understudy.http import _parse_events
+
+    events = []
+    for kind in ["functionCall", "functionResponse"]:
+        events.extend(
+            json.dumps(
+                {
+                    "author": agent,
+                    "invocationId": "run",
+                    "nodeInfo": {"path": f"root@1/{agent}@1"},
+                    "content": {
+                        "parts": [
+                            {
+                                kind: {
+                                    "id": "same",
+                                    "name": "lookup",
+                                    "response": {"agent": agent},
+                                }
+                            }
+                        ]
+                    },
+                }
+            )
+            for agent in ["a", "b"]
+        )
+    response = _parse_events(events, None)
+    assert [c.result for c in response.tool_calls] == [{"agent": "a"}, {"agent": "b"}]
+    assert len({c.execution_id for c in response.tool_calls}) == 2

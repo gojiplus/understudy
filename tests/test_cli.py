@@ -295,6 +295,8 @@ expectations:
 from understudy.runner import AgentResponse
 
 class MockApp:
+    from understudy import AdapterCapabilities
+    capabilities = AdapterCapabilities(tools=True, agents=True)
     def start(self, mocks=None):
         pass
 
@@ -479,7 +481,7 @@ def create_mocks():
         finally:
             sys.path.remove(str(mock_app_module))
 
-    def test_run_with_mocks(
+    def test_run_rejects_mocks_for_uninstrumented_app(
         self, runner, scene_file, mock_app_module, mock_mocks_module, tmp_path
     ):
         import sys
@@ -503,7 +505,9 @@ def create_mocks():
                 ],
             )
             assert "Using mocks:" in result.output
-            assert "test_tool" in result.output
+            assert "mock_mocks:create_mocks" in result.output
+            assert result.exit_code == 1
+            assert "Adapter cannot intercept tools" in result.output
         finally:
             sys.path.remove(str(mock_app_module))
             sys.path.remove(str(mock_mocks_module))
@@ -611,6 +615,8 @@ expectations:
 from understudy.runner import AgentResponse
 
 class MockApp:
+    from understudy import AdapterCapabilities
+    capabilities = AdapterCapabilities(tools=True, agents=True)
     def start(self, mocks=None):
         pass
 

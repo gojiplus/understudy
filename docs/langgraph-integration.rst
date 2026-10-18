@@ -34,7 +34,7 @@ understudy wraps your LangGraph agent in a ``LangGraphApp`` adapter:
    graph = create_my_agent(model)
 
    # Wrap it for understudy
-   app = LangGraphApp(graph=graph)
+   app = LangGraphApp(graph=graph, tool_interception=True)
 
 Mockable Tools
 --------------
@@ -155,7 +155,7 @@ Set up reusable fixtures in ``conftest.py``:
    def app(mocks):
        model = ChatOpenAI(model="gpt-4o-mini").bind_tools(tools)
        graph = create_customer_service_agent(model)
-       return LangGraphApp(graph=graph)
+       return LangGraphApp(graph=graph, tool_interception=True)
 
 Then use in tests:
 
@@ -207,7 +207,7 @@ Here's a complete test file:
    def app(mocks):
        model = ChatOpenAI(model="gpt-4o-mini").bind_tools(tools)
        graph = create_customer_service_agent(model)
-       return LangGraphApp(graph=graph)
+       return LangGraphApp(graph=graph, tool_interception=True)
 
    def test_basic_return(app, mocks):
        """Test that returnable items can be returned."""

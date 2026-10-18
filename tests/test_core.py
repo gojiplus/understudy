@@ -620,6 +620,9 @@ class TestRunStorage:
 
 
 class MockAgentApp:
+    from understudy import AdapterCapabilities
+
+    capabilities = AdapterCapabilities(tools=True, agents=True, interception=True)
     """A minimal mock implementation of AgentApp for testing."""
 
     def __init__(
@@ -1307,8 +1310,7 @@ class TestSimulateBatch:
             for i in range(3)
         ]
 
-        app = MockAgentApp()
-        traces = simulate_batch(app, scenes, n_sims=1, parallel=2)
+        traces = simulate_batch(MockAgentApp, scenes, n_sims=1, parallel=2)
 
         assert len(traces) == 3
 
@@ -1400,7 +1402,7 @@ class TestEvaluateBatchComprehensive:
             scene_id = "bad"
 
         traces = [BadTrace()]
-        expectations = Expectations()
+        expectations = Expectations(required_tools=["lookup"])
 
         results = evaluate_batch(traces, expectations=expectations)  # type: ignore[arg-type]
 

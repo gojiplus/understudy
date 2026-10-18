@@ -11,6 +11,25 @@ pytest.importorskip("langgraph", reason="langgraph not installed")
 pytest.importorskip("langchain_core", reason="langchain-core not installed")
 
 
+@pytest.fixture(autouse=True)
+def async_fake_streams(monkeypatch):
+    from understudy.langgraph import LangGraphApp
+
+    original = LangGraphApp.__init__
+
+    def initialize(self, graph, *args, **kwargs):
+        kwargs.setdefault("tool_interception", True)
+        original(self, graph, *args, **kwargs)
+
+        async def stream(*args, **kwargs):
+            for item in graph.stream(*args, **kwargs):
+                yield item
+
+        graph.astream = stream
+
+    monkeypatch.setattr(LangGraphApp, "__init__", initialize)
+
+
 @pytest.mark.parametrize("state", [None, SimpleNamespace(values=[], next=("node",))])
 def test_absent_or_non_mapping_state_and_orphan_result(state):
     from langchain_core.messages import ToolMessage
@@ -30,6 +49,11 @@ def test_absent_or_non_mapping_state_and_orphan_result(state):
         }
     ]
     graph.get_state.return_value = state
+    graph.stream.return_value = (
+        [((), c) for c in graph.stream.return_value]
+        if isinstance(graph.stream.return_value, list)
+        else graph.stream.return_value
+    )
     app = LangGraphApp(graph)
     app.start()
     response = app.send("hello")
@@ -58,16 +82,21 @@ def test_config_and_mock_scope():
     outer = MockToolkit()
     config = {"configurable": {"tenant": "customer"}}
 
-    def stream(state, config, stream_mode):
+    def stream(state, config, stream_mode, subgraphs):
         assert state["input"][0].content == "hello"
         assert config["configurable"]["tenant"] == "customer"
         assert config["configurable"]["thread_id"] == app.thread_id
         assert stream_mode == "updates"
-        yield {"agent": {"messages": AIMessage(content=lookup())}}
+        yield (), {"agent": {"messages": AIMessage(content=lookup())}}
 
     graph = Mock(
         stream=Mock(side_effect=stream),
         get_state=Mock(side_effect=ValueError("no checkpoint")),
+    )
+    graph.stream.return_value = (
+        [((), c) for c in graph.stream.return_value]
+        if isinstance(graph.stream.return_value, list)
+        else graph.stream.return_value
     )
     app = LangGraphApp(graph, input_key="input", config=config)
     app.start(mocks)
@@ -115,13 +144,18 @@ def test_state_usage_and_unmatched_tool_results(finished):
         values={"messages": messages, "order": "done"},
         next=() if finished else ("node",),
     )
+    graph.stream.return_value = (
+        [((), c) for c in graph.stream.return_value]
+        if isinstance(graph.stream.return_value, list)
+        else graph.stream.return_value
+    )
     app = LangGraphApp(graph)
     app.start()
     result = app.send("hello")
     assert result.content == "done"
     assert [call.result for call in result.tool_calls] == ["by-name", "by-id"]
     assert result.state_snapshot == {"order": "done"}
-    assert result.terminal_state == ("agent_ended" if finished else None)
+    assert result.terminal_state is None
     assert (result.input_tokens, result.output_tokens, result.thinking_tokens) == (
         10,
         5,
@@ -153,7 +187,13 @@ def test_missing_langchain(monkeypatch, operation):
 
     monkeypatch.setitem(sys.modules, "langchain_core.messages", None)
     app = LangGraphApp(Mock())
-    action = app.start if operation == "start" else lambda: app.send("hello")
+    import asyncio
+
+    action = (
+        app.start
+        if operation == "start"
+        else lambda: asyncio.run(app._send_async("hello"))
+    )
     with pytest.raises(ImportError, match=r"understudy\[langgraph\]"):
         action()
 
@@ -220,8 +260,13 @@ class TestLangGraphApp:
             }
 
         class MockGraph:
-            def stream(self, input_state, config=None, stream_mode=None):
-                return mock_stream(input_state, config, stream_mode)
+            def stream(
+                self, input_state, config=None, stream_mode=None, subgraphs=False
+            ):
+                return (
+                    ((), chunk)
+                    for chunk in mock_stream(input_state, config, stream_mode)
+                )
 
         app = LangGraphApp(graph=MockGraph())
         app.start()
@@ -286,8 +331,13 @@ class TestLangGraphApp:
             }
 
         class MockGraph:
-            def stream(self, input_state, config=None, stream_mode=None):
-                return mock_stream(input_state, config, stream_mode)
+            def stream(
+                self, input_state, config=None, stream_mode=None, subgraphs=False
+            ):
+                return (
+                    ((), chunk)
+                    for chunk in mock_stream(input_state, config, stream_mode)
+                )
 
         app = LangGraphApp(graph=MockGraph())
         app.start()
@@ -311,8 +361,13 @@ class TestLangGraphApp:
             yield {"agent": {"messages": [AIMessage(content="Hello! How can I help?")]}}
 
         class MockGraph:
-            def stream(self, input_state, config=None, stream_mode=None):
-                return mock_stream(input_state, config, stream_mode)
+            def stream(
+                self, input_state, config=None, stream_mode=None, subgraphs=False
+            ):
+                return (
+                    ((), chunk)
+                    for chunk in mock_stream(input_state, config, stream_mode)
+                )
 
         app = LangGraphApp(graph=MockGraph())
         app.start()

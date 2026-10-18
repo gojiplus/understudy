@@ -257,3 +257,22 @@ class TestAssertionHelpers:
         trace = self._make_trace()
         with pytest.raises(pytest.fail.Exception):
             AssertionHelpers.assert_terminal_state(trace, "failed")
+
+
+def test_turn_runner_fixture(pytester):
+    pytester.makepyfile("""
+import pytest
+from understudy import AdapterCapabilities, AgentResponse
+class App:
+    capabilities = AdapterCapabilities(tools=True, agents=True)
+    def start(self, mocks=None): pass
+    def send(self, message): return AgentResponse(message)
+    def stop(self): pass
+@pytest.fixture
+def app_factory(): return App
+def test_one_turn(turn_runner):
+    result = turn_runner("hello")
+    assert [t.content for t in result.trace.turns] == ["hello", "hello"]
+""")
+    result = pytester.runpytest_subprocess("-q")
+    result.assert_outcomes(passed=1)

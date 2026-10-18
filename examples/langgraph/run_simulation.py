@@ -106,7 +106,7 @@ def main():
 
     model = ChatOpenAI(model="gpt-4o-mini").bind_tools(tools)
     graph = create_customer_service_agent(model)
-    app = LangGraphApp(graph=graph)
+    app = LangGraphApp(graph=graph, tool_interception=True)
 
     mocks = create_mocks()
     storage = RunStorage(path=".understudy/langgraph_runs")

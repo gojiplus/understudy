@@ -14,6 +14,8 @@ from .runner import AgentApp, run
 from .trace import Trace
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .storage import RunStorage
 
 
@@ -126,17 +128,26 @@ class _SuiteExecutor(BatchExecutor[_SuiteTask, SceneResult]):
 
     def __init__(
         self,
-        app: AgentApp,
+        app: AgentApp | Callable[[], AgentApp],
         storage: RunStorage | None,
         tags: dict[str, str] | None,
         run_kwargs: dict[str, Any],
         parallel: int = 1,
     ):
         super().__init__(parallel)
+        if parallel > 1 and not callable(app):
+            raise ValueError(
+                "Parallel runs require an app factory for isolated sessions"
+            )
         self.app = app
         self.storage = storage
         self.tags = tags
-        self.run_kwargs = run_kwargs
+        self.run_kwargs = dict(run_kwargs)
+        self.mocks_factory = self.run_kwargs.pop("mocks_factory", None)
+        if self.run_kwargs.get("mocks") is not None and (
+            parallel > 1 or self.mocks_factory is not None
+        ):
+            raise ValueError("Use mocks_factory for isolated parallel mocks")
 
     def execute_one(self, item: _SuiteTask) -> SceneResult:
         scene_id_with_index = (
@@ -145,7 +156,14 @@ class _SuiteExecutor(BatchExecutor[_SuiteTask, SceneResult]):
             else f"{item.scene.id}_{item.sim_index}"
         )
         try:
-            trace = run(self.app, item.scene, **self.run_kwargs)
+            options = dict(self.run_kwargs)
+            if self.mocks_factory is not None:
+                options["mocks"] = self.mocks_factory()
+            trace = run(
+                self.app() if callable(self.app) else self.app,
+                item.scene,
+                **options,
+            )
             result = check(trace, item.scene.expectations)
             scene_result = SceneResult(
                 scene_id=scene_id_with_index,
@@ -188,7 +206,7 @@ class Suite:
 
     def run(
         self,
-        app: AgentApp,
+        app: AgentApp | Callable[[], AgentApp],
         parallel: int = 1,
         storage: RunStorage | None = None,
         tags: dict[str, str] | None = None,
@@ -203,7 +221,7 @@ class Suite:
             storage: Optional RunStorage to persist each scene run.
             tags: Optional dict of tags for filtering and comparison.
             n_sims: Number of simulations per scene (default: 1).
-            **run_kwargs: Additional kwargs passed to understudy.run().
+            **run_kwargs: Arguments for run; mocks_factory creates per-scene mocks.
 
         Returns:
             SuiteResults with individual scene outcomes.

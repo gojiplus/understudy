@@ -202,8 +202,10 @@ class RunStorage(FileStorage[dict[str, Any]]):
             "passed": check_result.passed if check_result else None,
             "terminal_state": trace.terminal_state,
             "turn_count": trace.turn_count,
-            "tools_called": trace.call_sequence(),
-            "agents_invoked": trace.agents_invoked(),
+            "tools_called": trace.call_sequence() if trace.tools_observed else [],
+            "tools_observed": trace.tools_observed,
+            "agents_invoked": trace.agents_invoked() if trace.agents_observed else [],
+            "agents_observed": trace.agents_observed,
             "tags": tags or {},
         }
         files["metadata.json"] = metadata

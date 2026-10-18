@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 import yaml
 
 from understudy.agentic import (
@@ -595,6 +596,7 @@ class TestAgenticMetrics:
 
 
 class MockAgenticApp:
+    supports_tool_mocking = True
     """Mock implementation of AgenticApp for testing."""
 
     def __init__(
@@ -616,7 +618,8 @@ class MockAgenticApp:
         self.step_count = 0
         self._done = False
 
-    def start(self, task: Task, environment: dict | None = None):
+    def start(self, task: Task, environment: dict | None = None, *, mocks=None):
+        self.mocks = mocks
         self.task = task
         self.environment = environment
         self.step_count = 0
@@ -625,6 +628,10 @@ class MockAgenticApp:
     def step(self) -> StepResult:
         if self.step_count < len(self.steps_to_return):
             result = self.steps_to_return[self.step_count]
+            if self.mocks is not None and result.action:
+                handler = self.mocks.resolve(result.action)
+                if handler is not None:
+                    result.observation = handler(**(result.action_args or {}))
             self.step_count += 1
             if self.step_count >= len(self.steps_to_return):
                 self._done = True
@@ -773,3 +780,13 @@ class TestArtifact:
         )
         assert len(trace.artifacts) == 1
         assert trace.artifacts[0].name == "result.json"
+
+
+def test_agentic_rejects_post_execution_mocking():
+    class UnsafeApp:
+        def start(self, *args, **kwargs):
+            pytest.fail("must reject before starting")
+
+    scene = AgenticScene(id="unsafe", task=Task(description="test", goal="test"))
+    with pytest.raises(ValueError, match="before execution"):
+        run_agentic(UnsafeApp(), scene, mocks=MockToolkit())

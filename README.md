@@ -42,6 +42,17 @@ See [examples/README.md](examples/README.md) for complete examples of both parad
 - [Agentic scene](https://github.com/gojiplus/understudy/blob/main/examples/agentic_scenes/code_review_task.yaml) — task-based scenario
 - [Example report](https://htmlpreview.github.io/?https://github.com/gojiplus/understudy/blob/main/examples/langgraph/report/index.html) — HTML report with metrics and transcripts
 
+## State injection and next-turn tests
+
+Restore a completed checkpoint, inject synthetic history/state, or replay through
+exchange X, then execute and assert only against exchange X+1. ADK and LangGraph
+support isolated checkpoint forks; `LangChainApp` builds an instrumented LangChain
+agent with tool middleware. Traces retain nested invocation identities.
+
+See the [state-testing guide](docs/state-testing.rst)
+for `run_turn`, `replay_to`, scoped tool mocks, pytest fixtures, CLI commands, and
+framework-specific restoration limits.
+
 ## Installation
 
 ```bash

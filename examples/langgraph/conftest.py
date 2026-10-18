@@ -97,7 +97,7 @@ def app(mocks):
 
     model = ChatOpenAI(model="gpt-4o-mini").bind_tools(tools)
     graph = create_customer_service_agent(model)
-    return LangGraphApp(graph=graph)
+    return LangGraphApp(graph=graph, tool_interception=True)
 
 
 @pytest.fixture

@@ -33,6 +33,15 @@ from .check import (
 )
 from .compare import ComparisonResult, SceneComparison, compare_runs
 from .diff import ToolCallDiff, TraceDiff, diff_tool_sequences, diff_traces
+from .execution import (
+    AdapterCapabilities,
+    Checkpoint,
+    StateFixture,
+    TurnResult,
+    UnsupportedCapabilityError,
+    replay_to,
+    run_turn,
+)
 from .judge_backends import CallbackBackend, JudgeBackend, LiteLLMBackend
 from .judges import FailureAnalysis, FailureAnalyzer, Judge, JudgeResult
 from .metrics import MetricRegistry, MetricResult
@@ -75,6 +84,7 @@ __all__ = [
     "TONE_EMPATHY",
     # rubrics
     "TOOL_USAGE_CORRECTNESS",
+    "AdapterCapabilities",
     "AgentApp",
     "AgentResponse",
     "AgentTransfer",
@@ -91,6 +101,7 @@ __all__ = [
     "CallbackBackend",
     "CheckItem",
     "CheckResult",
+    "Checkpoint",
     "ComparisonResult",
     "EvaluationResult",
     "EvaluationStorage",
@@ -122,6 +133,7 @@ __all__ = [
     # simulator
     "Simulator",
     "SimulatorBackend",
+    "StateFixture",
     "StateSnapshot",
     "Step",
     "StepResult",
@@ -139,6 +151,8 @@ __all__ = [
     "TraceStorage",
     "Turn",
     "TurnMetrics",
+    "TurnResult",
+    "UnsupportedCapabilityError",
     # agentic module
     "agentic",
     # check / evaluate
@@ -155,9 +169,11 @@ __all__ = [
     "load_trace",
     # replay
     "replay",
+    "replay_to",
     # runner / simulate
     "run",
     "run_agentic",
+    "run_turn",
     "simulate",
     "simulate_batch",
 ]

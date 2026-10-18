@@ -18,11 +18,11 @@
         <div class="metric-label">Turns</div>
     </div>
     <div class="metric-card">
-        <div class="metric-value">{{ metadata.tools_called|length }}</div>
+        <div class="metric-value">{{ metadata.tools_called|length if metadata.tools_observed is not sameas false else "Unavailable" }}</div>
         <div class="metric-label">Tool Calls</div>
     </div>
     <div class="metric-card">
-        <div class="metric-value">{{ metadata.agents_invoked|length }}</div>
+        <div class="metric-value">{{ metadata.agents_invoked|length if metadata.agents_observed is not sameas false else "Unavailable" }}</div>
         <div class="metric-label">Agents</div>
     </div>
     <div class="metric-card">
@@ -32,6 +32,29 @@
         <div class="metric-label">Terminal State</div>
     </div>
 </div>
+
+{% if trace.metadata.starting_point %}
+<div class="card">
+    <div class="card-header">Next-turn test</div>
+    <p>Starting from {{ trace.metadata.starting_point.mode }} after exchange {{ trace.metadata.starting_point.after_turn }}. Assertions below cover only the new exchange.</p>
+    {% if trace.metadata.state_changes %}
+    <pre>{{ trace.metadata.state_changes | tojson(indent=2) }}</pre>
+    {% endif %}
+</div>
+{% endif %}
+{% if trace.executions %}
+<div class="card">
+    <div class="card-header">Agent executions</div>
+    <table>
+        <thead><tr><th>Agent path</th><th>Invocation</th><th>Parent</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for execution in trace.executions %}
+        <tr><td>{{ execution.agent_path | join(' / ') }}</td><td>{{ execution.id }}</td><td>{{ execution.parent_id or '' }}</td><td>{{ execution.status }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 
 {% if trace.metrics and trace.metrics.turns %}
 <div class="card">

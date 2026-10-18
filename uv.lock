@@ -1373,6 +1373,20 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain"
+version = "1.4.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "langgraph" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6a/a4/a3ceefc3ec734912ca3a21dd79a5e4a98af73015a87e64d284a92cd5572c/langchain-1.4.4.tar.gz", hash = "sha256:baac6e13c08460e1decd0e60061b9a87c07135f1c977424040b0b57ff7bc7887", size = 742902, upload-time = "2026-10-08T22:14:10.86Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/02/36/c348f812eb37a137de2c80140ed1324ab11b75fa5a845e3f1035bacaac4a/langchain-1.4.4-py3-none-any.whl", hash = "sha256:2fd27e9a2d54ebcd915ac5ea51d79c772e020567ef6c6a76678182055489b804", size = 165363, upload-time = "2026-10-08T22:14:09.321Z" },
+]
+
+[[package]]
 name = "langchain-core"
 version = "1.6.9"
 source = { registry = "https://pypi.org/simple" }
@@ -3069,6 +3083,7 @@ all = [
     { name = "google-adk" },
     { name = "httpx" },
     { name = "jinja2" },
+    { name = "langchain" },
     { name = "langchain-core" },
     { name = "langchain-openai" },
     { name = "langgraph" },
@@ -3077,6 +3092,11 @@ all = [
 ]
 http = [
     { name = "httpx" },
+]
+langchain = [
+    { name = "langchain" },
+    { name = "langchain-core" },
+    { name = "langgraph" },
 ]
 langgraph = [
     { name = "langchain-core" },
@@ -3127,20 +3147,23 @@ test = [
 requires-dist = [
     { name = "click", marker = "extra == 'reports'", specifier = ">=8.0" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
-    { name = "google-adk", marker = "extra == 'adk'", specifier = ">=2.10" },
+    { name = "google-adk", marker = "extra == 'adk'", specifier = ">=2.11" },
     { name = "httpx", marker = "extra == 'http'", specifier = ">=0.27" },
     { name = "jinja2", marker = "extra == 'reports'", specifier = ">=3.0" },
-    { name = "langchain-core", marker = "extra == 'langgraph'", specifier = ">=0.3" },
+    { name = "langchain", marker = "extra == 'langchain'", specifier = ">=1.4.4" },
+    { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=1.6.9" },
+    { name = "langchain-core", marker = "extra == 'langgraph'", specifier = ">=1.6.9" },
     { name = "langchain-openai", marker = "extra == 'langgraph'", specifier = ">=0.3" },
-    { name = "langgraph", marker = "extra == 'langgraph'", specifier = ">=0.2" },
+    { name = "langgraph", marker = "extra == 'langchain'", specifier = ">=1.2.14" },
+    { name = "langgraph", marker = "extra == 'langgraph'", specifier = ">=1.2.14" },
     { name = "litellm", specifier = ">=1.50" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "python-dotenv", marker = "extra == 'adk'", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "understudy", extras = ["adk", "http", "langgraph", "server", "reports"], marker = "extra == 'all'" },
+    { name = "understudy", extras = ["adk", "http", "langgraph", "langchain", "server", "reports"], marker = "extra == 'all'" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.32" },
 ]
-provides-extras = ["adk", "http", "langgraph", "server", "reports", "all"]
+provides-extras = ["adk", "http", "langgraph", "server", "reports", "all", "langchain"]
 
 [package.metadata.requires-dev]
 dev = [

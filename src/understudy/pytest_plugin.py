@@ -207,3 +207,14 @@ class AssertionHelpers:
             pytest.fail(
                 f"Expected terminal state '{expected}', got '{trace.terminal_state}'"
             )
+
+
+@pytest.fixture
+def turn_runner(app_factory):
+    """Run isolated next-turn tests using the project's app_factory fixture."""
+    from .execution import run_turn
+
+    def execute(message=None, **options):
+        return run_turn(app_factory, message, **options)
+
+    return execute
