@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   LangGraph checkpoint forks; a native LangChain `create_agent` adapter.
 - `turn_runner` pytest fixture, `run-turn` and `replay-until` commands, and
   reports showing starting boundaries, state changes, and agent invocations.
+- Offline benchmarks for adapter overhead and checkpoint capture, restore, and
+  size with single and nested graphs.
 
 ### Changed
 
@@ -46,8 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Installed next-turn CLI commands import factories from the current project.
 - LangChain mock responses preserve native strings, content blocks, and tool names.
 - Private child history is excluded from new-turn traces, while sibling message IDs
-  remain independent. Checkpoint export fetches only the latest snapshot per
-  namespace, avoiding repeated deserialization of all historical snapshots.
+  remain independent. Checkpoint export fetches only the latest root and persistent
+  subagent snapshots, avoiding scans of historical snapshots and accumulation of
+  completed subagent invocations. Dormant persistent subagent state is preserved.
 
 Checkpoints include managed runtime and mock-service state, not external systems
 or model randomness. Restoring inside an unfinished execution is not supported.
