@@ -7,6 +7,7 @@ from typing import Any
 from ..mocks import MockToolkit
 from ..runner import AgentApp, AgentResponse
 from ..trace import ToolCall
+from .tools import MockableToolContext, get_mock_toolkit
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +81,13 @@ class LangGraphApp(AgentApp):
 
         input_state = {self.input_key: [HumanMessage(content=message)]}
 
-        config = {**self.config}
-        if "configurable" not in config:
-            config["configurable"] = {}
-        config["configurable"]["thread_id"] = self.thread_id
+        config = {
+            **self.config,
+            "configurable": {
+                **self.config.get("configurable", {}),
+                "thread_id": self.thread_id,
+            },
+        }
 
         tool_calls: list[ToolCall] = []
         tool_call_map: dict[str, ToolCall] = {}
@@ -93,54 +97,61 @@ class LangGraphApp(AgentApp):
         output_tokens = 0
         thinking_tokens = 0
 
-        for chunk in self.graph.stream(
-            input_state, config=config, stream_mode="updates"
-        ):
-            for updates in chunk.values():
-                messages = updates.get("messages", [])
-                if not isinstance(messages, list):
-                    messages = [messages]
+        with MockableToolContext(self._mocks or get_mock_toolkit()):
+            for chunk in self.graph.stream(
+                input_state, config=config, stream_mode="updates"
+            ):
+                for updates in chunk.values():
+                    messages = updates.get("messages", [])
+                    if not isinstance(messages, list):
+                        messages = [messages]
 
-                for msg in messages:
-                    if isinstance(msg, AIMessage):
-                        if msg.tool_calls:
-                            for tc in msg.tool_calls:
-                                call = ToolCall(
-                                    tool_name=tc["name"],
-                                    arguments=tc.get("args", {}),
-                                )
-                                tool_calls.append(call)
-                                # id is optional in LangChain's ToolCall; the
-                                # map exists only to pair a call with its later
-                                # result, so an unidentified call simply has no
-                                # entry rather than one keyed on None.
-                                if tc["id"] is not None:
-                                    tool_call_map[tc["id"]] = call
-                                logger.debug("Tool call: %s", tc["name"])
-                        if msg.content and isinstance(msg.content, str):
-                            final_content = msg.content
+                    for msg in messages:
+                        if isinstance(msg, AIMessage):
+                            if msg.tool_calls:
+                                for tc in msg.tool_calls:
+                                    call = ToolCall(
+                                        tool_name=tc["name"],
+                                        arguments=tc.get("args", {}),
+                                    )
+                                    tool_calls.append(call)
+                                    # id is optional in LangChain's ToolCall; the
+                                    # map exists only to pair a call with its later
+                                    # result, so an unidentified call simply has no
+                                    # entry rather than one keyed on None.
+                                    if tc["id"] is not None:
+                                        tool_call_map[tc["id"]] = call
+                                    logger.debug("Tool call: %s", tc["name"])
+                            if msg.content and isinstance(msg.content, str):
+                                final_content = msg.content
 
-                        # capture token usage from response_metadata
-                        if hasattr(msg, "response_metadata") and msg.response_metadata:
-                            usage = msg.response_metadata.get("token_usage", {})
-                            input_tokens += usage.get("prompt_tokens", 0) or 0
-                            output_tokens += usage.get("completion_tokens", 0) or 0
-                            thinking_tokens += usage.get("reasoning_tokens", 0) or 0
+                            # capture token usage from response_metadata
+                            if msg.usage_metadata:
+                                input_tokens += msg.usage_metadata["input_tokens"]
+                                output_tokens += msg.usage_metadata["output_tokens"]
+                                thinking_tokens += msg.usage_metadata.get(
+                                    "output_token_details", {}
+                                ).get("reasoning", 0)
+                            elif msg.response_metadata:
+                                usage = msg.response_metadata.get("token_usage", {})
+                                input_tokens += usage.get("prompt_tokens", 0) or 0
+                                output_tokens += usage.get("completion_tokens", 0) or 0
+                                thinking_tokens += usage.get("reasoning_tokens", 0) or 0
 
-                    elif isinstance(msg, ToolMessage):
-                        tool_call_id = getattr(msg, "tool_call_id", None)
-                        if tool_call_id and tool_call_id in tool_call_map:
-                            tool_call_map[tool_call_id].result = msg.content
-                        else:
-                            tool_name = getattr(msg, "name", None)
-                            if tool_name:
-                                for call in reversed(tool_calls):
-                                    if (
-                                        call.tool_name == tool_name
-                                        and call.result is None
-                                    ):
-                                        call.result = msg.content
-                                        break
+                        elif isinstance(msg, ToolMessage):
+                            tool_call_id = getattr(msg, "tool_call_id", None)
+                            if tool_call_id and tool_call_id in tool_call_map:
+                                tool_call_map[tool_call_id].result = msg.content
+                            else:
+                                tool_name = getattr(msg, "name", None)
+                                if tool_name:
+                                    for call in reversed(tool_calls):
+                                        if (
+                                            call.tool_name == tool_name
+                                            and call.result is None
+                                        ):
+                                            call.result = msg.content
+                                            break
 
         # capture state snapshot from graph and detect END node
         state_snapshot = None

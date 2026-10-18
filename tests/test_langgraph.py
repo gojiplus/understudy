@@ -1,11 +1,161 @@
 """Tests for LangGraph adapter."""
 
+from types import SimpleNamespace
+from unittest.mock import Mock
+
 import pytest
 
 from understudy import MockToolkit
 
 pytest.importorskip("langgraph", reason="langgraph not installed")
 pytest.importorskip("langchain_core", reason="langchain-core not installed")
+
+
+@pytest.mark.parametrize("state", [None, SimpleNamespace(values=[], next=("node",))])
+def test_absent_or_non_mapping_state_and_orphan_result(state):
+    from langchain_core.messages import ToolMessage
+
+    from understudy.langgraph import LangGraphApp
+
+    graph = Mock()
+    graph.stream.return_value = [
+        {
+            "node": {
+                "messages": [
+                    ToolMessage(
+                        content="orphan", tool_call_id="missing", name="unknown"
+                    )
+                ]
+            }
+        }
+    ]
+    graph.get_state.return_value = state
+    app = LangGraphApp(graph)
+    app.start()
+    response = app.send("hello")
+    assert response.state_snapshot is None
+    assert response.terminal_state is None
+    assert response.tool_calls == []
+    app.stop()
+
+
+def test_config_and_mock_scope():
+    from langchain_core.messages import AIMessage
+
+    from understudy.langgraph import LangGraphApp
+    from understudy.langgraph.tools import (
+        MockableToolContext,
+        get_mock_toolkit,
+        mockable_tool,
+    )
+
+    @mockable_tool
+    def lookup():
+        return "real"
+
+    mocks = MockToolkit()
+    mocks.handle("lookup")(lambda: "mocked")
+    outer = MockToolkit()
+    config = {"configurable": {"tenant": "customer"}}
+
+    def stream(state, config, stream_mode):
+        assert state["input"][0].content == "hello"
+        assert config["configurable"]["tenant"] == "customer"
+        assert config["configurable"]["thread_id"] == app.thread_id
+        assert stream_mode == "updates"
+        yield {"agent": {"messages": AIMessage(content=lookup())}}
+
+    graph = Mock(
+        stream=Mock(side_effect=stream),
+        get_state=Mock(side_effect=ValueError("no checkpoint")),
+    )
+    app = LangGraphApp(graph, input_key="input", config=config)
+    app.start(mocks)
+    with MockableToolContext(outer):
+        assert app.send("hello").content == "mocked"
+        assert get_mock_toolkit() is outer
+    assert get_mock_toolkit() is None
+    assert config == {"configurable": {"tenant": "customer"}}
+    app.stop()
+
+
+@pytest.mark.parametrize("finished", [False, True])
+def test_state_usage_and_unmatched_tool_results(finished):
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    from understudy.langgraph import LangGraphApp
+
+    messages = [
+        HumanMessage(content="hello"),
+        AIMessage(
+            content="working",
+            tool_calls=[
+                {"name": "lookup", "args": {}, "id": None},
+                {"name": "lookup", "args": {"id": 2}, "id": "known"},
+            ],
+            response_metadata={
+                "token_usage": {
+                    "prompt_tokens": 4,
+                    "completion_tokens": 2,
+                    "reasoning_tokens": 1,
+                }
+            },
+        ),
+        ToolMessage(content="by-id", tool_call_id="known", name="lookup"),
+        ToolMessage(content="by-name", tool_call_id="missing", name="lookup"),
+        ToolMessage(content="ignored", tool_call_id="missing"),
+        AIMessage(
+            content="done",
+            usage_metadata={"input_tokens": 6, "output_tokens": 3, "total_tokens": 9},
+        ),
+    ]
+    graph = Mock()
+    graph.stream.return_value = [{"node": {"messages": messages}}]
+    graph.get_state.return_value = SimpleNamespace(
+        values={"messages": messages, "order": "done"},
+        next=() if finished else ("node",),
+    )
+    app = LangGraphApp(graph)
+    app.start()
+    result = app.send("hello")
+    assert result.content == "done"
+    assert [call.result for call in result.tool_calls] == ["by-name", "by-id"]
+    assert result.state_snapshot == {"order": "done"}
+    assert result.terminal_state == ("agent_ended" if finished else None)
+    assert (result.input_tokens, result.output_tokens, result.thinking_tokens) == (
+        10,
+        5,
+        1,
+    )
+    app.stop()
+
+
+def test_mock_scope_restored_on_graph_error():
+    from understudy.langgraph import LangGraphApp
+    from understudy.langgraph.tools import MockableToolContext, get_mock_toolkit
+
+    outer = MockToolkit()
+    app = LangGraphApp(Mock(stream=Mock(side_effect=ValueError("graph failed"))))
+    app.start(MockToolkit())
+    with MockableToolContext(outer):
+        with pytest.raises(ValueError, match="graph failed"):
+            app.send("hello")
+        assert get_mock_toolkit() is outer
+    assert get_mock_toolkit() is None
+    app.stop()
+
+
+@pytest.mark.parametrize("operation", ["start", "send"])
+def test_missing_langchain(monkeypatch, operation):
+    import sys
+
+    from understudy.langgraph import LangGraphApp
+
+    monkeypatch.setitem(sys.modules, "langchain_core.messages", None)
+    app = LangGraphApp(Mock())
+    action = app.start if operation == "start" else lambda: app.send("hello")
+    with pytest.raises(ImportError, match=r"understudy\[langgraph\]"):
+        action()
 
 
 class TestLangGraphApp:

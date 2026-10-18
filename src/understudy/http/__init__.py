@@ -1,9 +1,11 @@
 """HTTP adapter: test deployed ADK agents via REST API."""
 
 import json
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
 
+from ..mocks import MockToolkit
 from ..runner import AgentApp, AgentResponse
 from ..trace import AgentTransfer, ToolCall
 
@@ -47,12 +49,17 @@ class HTTPApp(AgentApp):
         self._client = None
         self._session_id: str | None = None
         self._current_agent: str | None = None
-        self._agent_transfers: list[AgentTransfer] = []
 
-    # `mocks` is part of the AgentApp protocol; a remotely deployed agent
-    # cannot have mock tools installed, so it is accepted and ignored.
-    def start(self, mocks=None) -> None:  # noqa: ARG002
-        """Initialize HTTP client and create a session."""
+    def start(self, mocks: MockToolkit | None = None) -> None:  # noqa: ARG002
+        """Create an HTTP client and a remote session.
+
+        Args:
+            mocks: Accepted by the adapter protocol; remote tools are not replaced.
+
+        Raises:
+            ImportError: If httpx is not installed.
+            RuntimeError: If the server rejects session creation.
+        """
         try:
             import httpx
         except ImportError as e:
@@ -62,115 +69,71 @@ class HTTPApp(AgentApp):
 
         self._client = httpx.Client(timeout=self.timeout, headers=self.headers)
         self._current_agent = None
-        self._agent_transfers = []
+        try:
+            self._session_id = self._create_session()
+        except Exception as e:
+            self.stop()
+            raise RuntimeError(f"Session creation failed: {e}") from e
 
+    def _create_session(self) -> str:
+        """Create the session required by ADK's run endpoint."""
         import uuid
 
-        self._session_id = str(uuid.uuid4())
+        assert self._client is not None  # noqa: S101
+        session_id = str(uuid.uuid4())
+        url = (
+            f"{self.base_url}/apps/{self.app_name}/users/{self.user_id}"
+            f"/sessions/{session_id}"
+        )
+        response = self._client.post(url, json={})
+        response.raise_for_status()
+        return response.json()["id"]
 
     def send(self, message: str) -> AgentResponse:
-        """Send a message to the deployed agent and capture the response."""
-        if not self._client:
-            raise RuntimeError("HTTPApp not started. Call start() first.")
-
-        try:
-            import httpx
-        except ImportError as e:
-            raise ImportError(
-                "httpx package required. Install with: pip install understudy[http]"
-            ) from e
-
-        url = f"{self.base_url}/run_sse"
-        payload = {
-            "app_name": self.app_name,
-            "user_id": self.user_id,
-            "session_id": self._session_id,
-            "new_message": {
-                "role": "user",
-                "parts": [{"text": message}],
+        """Send a message and capture the streamed ADK events."""
+        return self._send(
+            f"{self.base_url}/run_sse",
+            {
+                "app_name": self.app_name,
+                "user_id": self.user_id,
+                "session_id": self._session_id,
+                "new_message": {"role": "user", "parts": [{"text": message}]},
             },
-        }
+        )
 
-        tool_calls: list[ToolCall] = []
-        agent_text_parts: list[str] = []
-        terminal_state: str | None = None
-        current_agent = self._current_agent
+    def _send(self, url: str, payload: dict[str, Any]) -> AgentResponse:
+        """Read one turn from the remote agent.
+
+        Args:
+            url: Streaming endpoint.
+            payload: Request body for this transport.
+
+        Returns:
+            The text, tool events, transfers, and usage for this turn.
+
+        Raises:
+            RuntimeError: If the adapter is stopped or the request fails.
+        """
+        if self._client is None:
+            raise RuntimeError("HTTPApp not started. Call start() first.")
+        import httpx
 
         try:
             with self._client.stream("POST", url, json=payload) as response:
                 response.raise_for_status()
-                for line in response.iter_lines():
-                    if not line or not line.startswith("data:"):
-                        continue
-
-                    data = line[5:].strip()
-                    if not data:
-                        continue
-
-                    try:
-                        event = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
-
-                    event_agent = event.get("author")
-                    if event_agent and event_agent != current_agent:
-                        if current_agent:
-                            self._agent_transfers.append(
-                                AgentTransfer(
-                                    from_agent=current_agent,
-                                    to_agent=event_agent,
-                                    timestamp=datetime.now(UTC),
-                                )
-                            )
-                        current_agent = event_agent
-
-                    actions = event.get("actions", {})
-                    if actions and actions.get("transfer_to_agent"):
-                        target = actions["transfer_to_agent"]
-                        if current_agent and target != current_agent:
-                            self._agent_transfers.append(
-                                AgentTransfer(
-                                    from_agent=current_agent,
-                                    to_agent=target,
-                                    timestamp=datetime.now(UTC),
-                                )
-                            )
-                        current_agent = target
-
-                    for fc in event.get("function_calls", []):
-                        call = ToolCall(
-                            tool_name=fc.get("name", ""),
-                            arguments=fc.get("args", {}),
-                            agent_name=current_agent,
-                        )
-                        tool_calls.append(call)
-
-                    content = event.get("content", {})
-                    for part in content.get("parts", []):
-                        text = part.get("text")
-                        if text:
-                            agent_text_parts.append(text)
-
-        except httpx.HTTPStatusError as e:
-            raise RuntimeError(f"HTTP request failed: {e.response.status_code}") from e
-
-        self._current_agent = current_agent
-
-        return AgentResponse(
-            content=" ".join(agent_text_parts),
-            tool_calls=tool_calls,
-            terminal_state=terminal_state,
-            agent_name=current_agent,
-            agent_transfers=list(self._agent_transfers),
-        )
+                result = _parse_events(response.iter_lines(), self._current_agent)
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"HTTP request failed: {e}") from e
+        self._current_agent = result.agent_name
+        return result
 
     def stop(self) -> None:
-        """Clean up HTTP client."""
-        if self._client:
+        """Close the HTTP client and forget local session state."""
+        if self._client is not None:
             self._client.close()
             self._client = None
         self._session_id = None
-        self._agent_transfers = []
+        self._current_agent = None
 
 
 class AgentEngineApp(HTTPApp):
@@ -238,114 +201,150 @@ class AgentEngineApp(HTTPApp):
         super().start(mocks)
 
     def _get_access_token(self) -> str:
-        """Get access token from credentials."""
-        if self._credentials:
-            if hasattr(self._credentials, "token"):
-                return self._credentials.token
-            if hasattr(self._credentials, "refresh"):
-                from google.auth.transport.requests import Request
+        """Get a valid access token from supplied or default credentials.
 
-                self._credentials.refresh(Request())
-                return self._credentials.token
+        Returns:
+            The credentials' access token.
 
+        Raises:
+            ImportError: If google-auth is not installed.
+            RuntimeError: If credentials cannot be loaded or refreshed.
+        """
         try:
             import google.auth
-            import google.auth.transport.requests
-
-            creds, _ = google.auth.default()
-            creds.refresh(google.auth.transport.requests.Request())
-            return creds.token
+            from google.auth.credentials import TokenState
+            from google.auth.transport.requests import Request
         except ImportError as e:
             raise ImportError(
                 "google-auth package required for Agent Engine. "
                 "Install with: pip install google-auth"
             ) from e
+        try:
+            if self._credentials is None:
+                self._credentials, _ = google.auth.default()
+            if self._credentials.token_state != TokenState.FRESH:
+                self._credentials.refresh(Request())
+            return self._credentials.token
         except Exception as e:
             raise RuntimeError(f"Failed to get Google Cloud credentials: {e}") from e
 
-    def send(self, message: str) -> AgentResponse:
-        """Send a message to Agent Engine."""
-        if not self._client:
-            raise RuntimeError("AgentEngineApp not started. Call start() first.")
+    def _create_session(self) -> str:
+        """Create a session through the Agent Engine query endpoint."""
+        assert self._client is not None  # noqa: S101
+        response = self._client.post(
+            f"{self.base_url}:query",
+            json={
+                "class_method": "async_create_session",
+                "input": {"user_id": self.user_id},
+            },
+        )
+        response.raise_for_status()
+        return response.json()["id"]
 
-        url = f"{self.base_url}:streamQuery"
-        payload = {
-            "input": {
-                "app_name": self.app_name,
-                "user_id": self.user_id,
-                "session_id": self._session_id,
-                "new_message": {
-                    "role": "user",
-                    "parts": [{"text": message}],
+    def send(self, message: str) -> AgentResponse:
+        """Send a message through Agent Engine's async_stream_query method."""
+        return self._send(
+            f"{self.base_url}:streamQuery",
+            {
+                "class_method": "async_stream_query",
+                "input": {
+                    "user_id": self.user_id,
+                    "session_id": self._session_id,
+                    "message": message,
                 },
             },
-        }
-
-        tool_calls: list[ToolCall] = []
-        agent_text_parts: list[str] = []
-        terminal_state: str | None = None
-        current_agent = self._current_agent
-
-        try:
-            with self._client.stream("POST", url, json=payload) as response:
-                response.raise_for_status()
-                for line in response.iter_lines():
-                    if not line:
-                        continue
-
-                    try:
-                        event = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-
-                    event_agent = event.get("author")
-                    if event_agent and event_agent != current_agent:
-                        if current_agent:
-                            self._agent_transfers.append(
-                                AgentTransfer(
-                                    from_agent=current_agent,
-                                    to_agent=event_agent,
-                                    timestamp=datetime.now(UTC),
-                                )
-                            )
-                        current_agent = event_agent
-
-                    actions = event.get("actions", {})
-                    if actions and actions.get("transfer_to_agent"):
-                        target = actions["transfer_to_agent"]
-                        if current_agent and target != current_agent:
-                            self._agent_transfers.append(
-                                AgentTransfer(
-                                    from_agent=current_agent,
-                                    to_agent=target,
-                                    timestamp=datetime.now(UTC),
-                                )
-                            )
-                        current_agent = target
-
-                    for fc in event.get("function_calls", []):
-                        call = ToolCall(
-                            tool_name=fc.get("name", ""),
-                            arguments=fc.get("args", {}),
-                            agent_name=current_agent,
-                        )
-                        tool_calls.append(call)
-
-                    content = event.get("content", {})
-                    for part in content.get("parts", []):
-                        text = part.get("text")
-                        if text:
-                            agent_text_parts.append(text)
-
-        except Exception as e:
-            raise RuntimeError(f"Agent Engine request failed: {e}") from e
-
-        self._current_agent = current_agent
-
-        return AgentResponse(
-            content=" ".join(agent_text_parts),
-            tool_calls=tool_calls,
-            terminal_state=terminal_state,
-            agent_name=current_agent,
-            agent_transfers=list(self._agent_transfers),
         )
+
+
+def _parse_events(lines: Iterable[str], current_agent: str | None) -> AgentResponse:
+    """Decode ADK API server SSE or Agent Engine newline-delimited events."""
+    calls: list[ToolCall] = []
+    calls_by_id: dict[str, ToolCall] = {}
+    transfers: list[AgentTransfer] = []
+    text_parts: list[str] = []
+    terminal_state = None
+    input_tokens = output_tokens = thinking_tokens = 0
+
+    for line in lines:
+        data = line.removeprefix("data:").strip()
+        if not data:
+            continue
+        try:
+            event = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+
+        actions = event.get("actions") or {}
+        for target in (
+            event.get("author"),
+            actions.get("transferToAgent", actions.get("transfer_to_agent")),
+        ):
+            if target and target != current_agent:
+                if current_agent:
+                    transfers.append(
+                        AgentTransfer(
+                            from_agent=current_agent,
+                            to_agent=target,
+                            timestamp=datetime.now(UTC),
+                        )
+                    )
+                current_agent = target
+        if actions.get("escalate"):
+            terminal_state = "agent_ended"
+
+        content = event.get("content") or {}
+        for part in content.get("parts") or []:
+            if part.get("text") and not part.get("thought"):
+                text_parts.append(part["text"])
+            function_call = part.get("functionCall", part.get("function_call"))
+            if function_call and function_call.get("name"):
+                call = ToolCall(
+                    tool_name=function_call["name"],
+                    arguments=function_call.get("args") or {},
+                    agent_name=current_agent,
+                )
+                calls.append(call)
+                if function_call.get("id"):
+                    calls_by_id[function_call["id"]] = call
+            function_response = part.get(
+                "functionResponse", part.get("function_response")
+            )
+            if function_response:
+                if function_response.get("id"):
+                    matched = calls_by_id.get(function_response["id"])
+                else:
+                    matched = next(
+                        (
+                            call
+                            for call in calls
+                            if call.tool_name == function_response.get("name")
+                            and call.result is None
+                        ),
+                        None,
+                    )
+                if matched is not None:
+                    matched.result = function_response.get("response")
+
+        usage = event.get("usageMetadata", event.get("usage_metadata")) or {}
+        input_tokens += (
+            usage.get("promptTokenCount", usage.get("prompt_token_count")) or 0
+        )
+        output_tokens += (
+            usage.get("candidatesTokenCount", usage.get("candidates_token_count")) or 0
+        )
+        thinking_tokens += (
+            usage.get("thoughtsTokenCount", usage.get("thoughts_token_count")) or 0
+        )
+
+    return AgentResponse(
+        content=" ".join(text_parts),
+        tool_calls=calls,
+        terminal_state=terminal_state,
+        agent_name=current_agent,
+        agent_transfers=transfers,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        thinking_tokens=thinking_tokens,
+    )

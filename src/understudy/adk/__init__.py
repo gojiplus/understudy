@@ -81,6 +81,7 @@ class ADKApp(AgentApp):
         self._mocks: MockToolkit | None = None
         self._current_agent: str | None = None
         self._agent_transfers: list[AgentTransfer] = []
+        self._original_tool_callback: Any = None
 
     def start(self, mocks: MockToolkit | None = None) -> None:
         """Initialize the ADK session."""
@@ -114,6 +115,7 @@ class ADKApp(AgentApp):
 
         self._session_service = InMemorySessionService()
         if mocks:
+            self._original_tool_callback = self.agent.before_tool_callback
             self.agent.before_tool_callback = _create_mock_callback(mocks)
             logger.debug("Registered %d mock handlers", len(mocks.available_tools))
 
@@ -160,6 +162,7 @@ class ADKApp(AgentApp):
         )
 
         tool_calls: list[ToolCall] = []
+        self._agent_transfers = []
         agent_text_parts: list[str] = []
         terminal_state: str | None = None
         current_agent_name = self._current_agent
@@ -273,6 +276,9 @@ class ADKApp(AgentApp):
 
     def stop(self) -> None:
         """Clean up the ADK session."""
+        if self._mocks is not None:
+            self.agent.before_tool_callback = self._original_tool_callback
+            self._original_tool_callback = None
         self._runner = None
         self._session = None
         self._session_service = None
