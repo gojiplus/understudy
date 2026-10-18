@@ -404,3 +404,45 @@ def test_checkpoint_export_work_grows_linearly():
             app.stop()
     assert work[1][0] <= 2 * work[0][0]
     assert work[1][1] <= 6 * work[0][1]
+
+
+def test_fresh_child_invocations_can_reuse_message_ids():
+    from langchain_core.messages import ToolMessage
+
+    def factory():
+        def child_node(state):
+            return {
+                "messages": [
+                    AIMessage(
+                        id="first-message",
+                        content="",
+                        tool_calls=[{"name": "lookup", "id": "call", "args": {}}],
+                    ),
+                    ToolMessage(content="new result", tool_call_id="call"),
+                ]
+            }
+
+        child = (
+            StateGraph(State)
+            .add_node("model", child_node)
+            .add_edge(START, "model")
+            .add_edge("model", END)
+            .compile()
+        )
+
+        def wrapper(state):
+            child.invoke({"messages": [state["messages"][-1]]})
+            return {"messages": [AIMessage(content="root done")]}
+
+        graph = (
+            StateGraph(State)
+            .add_node("wrapper", wrapper)
+            .add_edge(START, "wrapper")
+            .add_edge("wrapper", END)
+            .compile(checkpointer=InMemorySaver())
+        )
+        return LangGraphApp(graph)
+
+    first = run_turn(factory, "one", capture_checkpoint=True)
+    second = run_turn(factory, "two", checkpoint=first.checkpoint)
+    assert len(first.trace.tool_calls) == len(second.trace.tool_calls) == 1

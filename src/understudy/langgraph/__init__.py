@@ -176,7 +176,7 @@ class LangGraphApp(AgentApp):
                             if msg.id in local_ids:
                                 continue
                             local_ids.add(msg.id)
-                            path = tuple(part.split(":")[0] for part in namespace)
+                            path = namespace
                             if any(
                                 msg.id in self._message_history.get(path[:i], ())
                                 for i in range(len(path) + 1)
@@ -263,8 +263,7 @@ class LangGraphApp(AgentApp):
                                             break
 
         for namespace, ids in seen_messages.items():
-            path = tuple(part.split(":")[0] for part in namespace)
-            self._message_history.setdefault(path, set()).update(ids)
+            self._message_history.setdefault(namespace, set()).update(ids)
 
         # capture state snapshot from graph and detect END node
         state_snapshot = None
@@ -390,9 +389,7 @@ class LangGraphApp(AgentApp):
             config = self._config()
             config["configurable"]["checkpoint_ns"] = record["namespace"]
             saver.put(config, data, record["metadata"], data["channel_versions"])
-            path = tuple(
-                part.split(":")[0] for part in record["namespace"].split("|") if part
-            )
+            path = tuple(part for part in record["namespace"].split("|") if part)
             self._message_history.setdefault(path, set()).update(
                 message.id
                 for message in data["channel_values"].get(self.input_key, [])
