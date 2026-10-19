@@ -9,7 +9,7 @@ updates:
       # google-adk 2.12 requires OpenTelemetry <=1.42.1; FastAPI needs >=1.44.
       # Remove this bound when ADK supports the newer OpenTelemetry release.
       - dependency-name: "fastapi"
-        versions: [">=0.143.0"]
+        versions: [">=0.142.0"]
     # Dependabot's default keeps only the dependencies pyproject.toml names
     # current; everything they pull in sits in uv.lock untouched until an
     # advisory or an upstream floor forces the issue (reporoulette carried
