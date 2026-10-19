@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -1388,7 +1388,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "1.6.9"
+version = "1.6.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -1402,14 +1402,14 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a7/d3/e9611e44e62ab8175127e137587c62dc2ed00e2615aebd89dfdb77f5fba0/langchain_core-1.6.9.tar.gz", hash = "sha256:34394228603e6f0bd24ce4e773b58b7d160e1b8cf489ecb350cf41f5366f5e92", size = 1010051, upload-time = "2026-10-08T20:11:19.881Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f7/00/0a95f74a79908e7bc844a82fca35c1afc55689f55aaed086e95745946db8/langchain_core-1.6.10.tar.gz", hash = "sha256:3ad7a64eab150c1fea9f8a748b1c076aa1a960c5cf7c28d81a841a2f2dbffad1", size = 1010280, upload-time = "2026-10-12T14:13:51.184Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/41/fdcdd869c052874b17e2325c986cf8c2fc6bbefa3b9d5404dd64dfffb12a/langchain_core-1.6.9-py3-none-any.whl", hash = "sha256:2bacea12270fd4cfdeeefdc5977e7e8b3c30814c509534d1ef43f4e5b7d3f657", size = 572951, upload-time = "2026-10-08T20:11:18.189Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/2c/6ed698c6b451af0ed0efdbe94a703c18aea768d925347d8d1efd5645ae8c/langchain_core-1.6.10-py3-none-any.whl", hash = "sha256:14341bdd8b42d0dd9a53dbbcd8b0599ab47b0c718c7caa12e3eb5c50b32cffcb", size = 573253, upload-time = "2026-10-12T14:13:49.616Z" },
 ]
 
 [[package]]
 name = "langchain-openai"
-version = "1.7.0"
+version = "1.7.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -1417,9 +1417,9 @@ dependencies = [
     { name = "openai" },
     { name = "tiktoken" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/34/68/dd7f7ef76efe58222d37f1b1a5595b1bb368fc9165f71526db26e4c5759e/langchain_openai-1.7.0.tar.gz", hash = "sha256:7df2db16d32320ba563b7e4291a71ec6bf7b0ea8a5369ed2a0501d74928ea6d0", size = 3404806, upload-time = "2026-10-08T16:07:35.135Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/20/2a19ea06055498711ee68c9675bc57125080916c001fae510646bc468ebb/langchain_openai-1.7.1.tar.gz", hash = "sha256:f9fa064c576911ff8d7c6566003bffb7eb5682c43d48407310d9de6b955f5496", size = 3405463, upload-time = "2026-10-12T14:32:52.655Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b6/ef/3f40387231281eaefb0bec31bfa86a7d533de9d90b46802c3e24d436a163/langchain_openai-1.7.0-py3-none-any.whl", hash = "sha256:a4d319385019c010c579b39e8951e4d5ededeacf94cd9c79162f4cb7ecba50fb", size = 145622, upload-time = "2026-10-08T16:07:33.119Z" },
+    { url = "https://files.pythonhosted.org/packages/31/58/9a71963cb11bf9ddee997fda9d05ef6ee3645de39a65ac6fb46423a56dda/langchain_openai-1.7.1-py3-none-any.whl", hash = "sha256:e65f2da39199a8e155fb6ae732e0aea208a01da2710a5da701d5e1a116195fcf", size = 146099, upload-time = "2026-10-12T14:32:51.057Z" },
 ]
 
 [[package]]
@@ -2785,11 +2785,11 @@ wheels = [
 
 [[package]]
 name = "soupsieve"
-version = "3.0.2"
+version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e2/28/d05a6e0818f302952dc80fb1054a1e617ec6cba9dd8f9cba75df445f3be8/soupsieve-3.0.2.tar.gz", hash = "sha256:841ce01c8e80b3bf95c2f2657f191b024be1cdd9d6c0d24a663af247da81911a", size = 115525, upload-time = "2026-10-12T01:36:25.009Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5e/77/2dcfa996b01702ab8fd0763d84098f6a640d6162a328f1c04c2697579a1a/soupsieve-3.0.3.tar.gz", hash = "sha256:7dcf6022eed0399eb9934a75e020148f7a2024c37b7dfcd3cf2c5505d69c364e", size = 115923, upload-time = "2026-10-12T13:21:17.696Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/68/d9/12dc4b673c89a86500f40d1c7107b902d49dd0b8a0ef3dfb883daaa0a4b8/soupsieve-3.0.2-py3-none-any.whl", hash = "sha256:9f2c709e4bfbb3f520289e81a4e14808bf0b3259c7f6c3b9efab30058be0607e", size = 41681, upload-time = "2026-10-12T01:36:23.706Z" },
+    { url = "https://files.pythonhosted.org/packages/49/ca/f639c80449997b88aba7bc9705d25dd76cc0844f45f187862fd8f8bb18fa/soupsieve-3.0.3-py3-none-any.whl", hash = "sha256:fa30e3ba4809cb81ce1f3209f2fbe3e779fc445f0439bc147a0d7c4601743f21", size = 41705, upload-time = "2026-10-12T13:21:16.474Z" },
 ]
 
 [[package]]
