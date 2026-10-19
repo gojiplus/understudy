@@ -3,6 +3,9 @@ updates:
   - package-ecosystem: "uv"
     directory: "/"
     ignore:
+      # Newer LiteLLM releases require downgrading filelock and huggingface-hub.
+      - dependency-name: "litellm"
+        versions: [">=1.104.0"]
       # google-adk 2.12 requires OpenTelemetry <=1.42.1; FastAPI needs >=1.44.
       # Remove this bound when ADK supports the newer OpenTelemetry release.
       - dependency-name: "fastapi"
