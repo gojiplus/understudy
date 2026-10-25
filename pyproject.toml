@@ -149,3 +149,14 @@ dev = [
 
 [tool.codespell]
 builtin = "clear,rare,en-GB_to_en-US"
+
+[tool.preen]
+# opentelemetry-api 1.42.1: CVE-2026-114603 (quadratic parsing of an inbound
+# W3C tracestate header) is fixed in 1.45.1, which google-adk (every release
+# through 2.13.0) excludes with opentelemetry-api<=1.44. It arrives only through
+# the [adk] extra. Not reachable: no OpenTelemetry web instrumentation is
+# installed, understudy never extracts trace headers, and ADK's one extract()
+# call passes a carrier holding only traceparent, so tracestate is never
+# parsed. Checked 2026-10-24. Remove when google-adk allows
+# opentelemetry-api>=1.45.1.
+audit_ignore = ["CVE-2026-114603"]
