@@ -955,96 +955,102 @@ def _get_mocks_section(content: str) -> str:
     return ""
 
 
-def _customize_conftest_adk(content: str) -> str:
-    """Customize conftest.py for ADK adapter."""
+def _conftest_for(
+    content: str,
+    *,
+    adapter: str,
+    target: str,
+    setup: tuple[str, str],
+    example: str,
+    build: str,
+    configure: str | None = None,
+) -> str:
+    """Render conftest.py for one adapter from the shared template.
+
+    Args:
+        content: The generic conftest template, whose mocks fixture is kept.
+        adapter: Adapter class name, e.g. ``ADKApp``.
+        target: What the user wraps, e.g. ``ADK agent``.
+        setup: The TODO line and the commented hint below it.
+        example: Docstring example lines, already indented.
+        build: The commented line that builds the app.
+        configure: What the error asks the user to configure, if not
+            ``target``.
+
+    Returns:
+        The customized conftest.py source.
+    """
+    module = adapter.removesuffix("App").lower()
+    framework = adapter.removesuffix("App")
+    todo, hint = setup
     mocks_section = _get_mocks_section(content)
     return f'''"""Pytest configuration for understudy tests."""
 
 import pytest
 
 from understudy import MockToolkit
-from understudy.adk import ADKApp
+from understudy.{module} import {adapter}
 
-# TODO: Import your ADK agent
-# from myagent import root_agent
+# TODO: {todo}
+# {hint}
 
 
 @pytest.fixture
 def app():
-    """Return your ADK agent wrapped in ADKApp.
+    """Return your {target} wrapped in {adapter}.
 
     Example:
-        from myagent import root_agent
-        return ADKApp(root_agent)
+{example}
     """
-    # TODO: Return your ADK app
-    # return ADKApp(root_agent)
-    raise NotImplementedError("Configure your ADK agent in conftest.py")
+    # TODO: Return your {framework} app
+    # {build}
+    raise NotImplementedError("Configure your {configure or target} in conftest.py")
 
 
 {mocks_section}
 '''
+
+
+def _customize_conftest_adk(content: str) -> str:
+    """Customize conftest.py for ADK adapter."""
+    return _conftest_for(
+        content,
+        adapter="ADKApp",
+        target="ADK agent",
+        setup=("Import your ADK agent", "from myagent import root_agent"),
+        example=(
+            "        from myagent import root_agent\n        return ADKApp(root_agent)"
+        ),
+        build="return ADKApp(root_agent)",
+    )
 
 
 def _customize_conftest_langgraph(content: str) -> str:
     """Customize conftest.py for LangGraph adapter."""
-    mocks_section = _get_mocks_section(content)
-    return f'''"""Pytest configuration for understudy tests."""
-
-import pytest
-
-from understudy import MockToolkit
-from understudy.langgraph import LangGraphApp
-
-# TODO: Import your LangGraph graph
-# from myagent import graph
-
-
-@pytest.fixture
-def app():
-    """Return your LangGraph graph wrapped in LangGraphApp.
-
-    Example:
-        from myagent import graph
-        return LangGraphApp(graph)
-    """
-    # TODO: Return your LangGraph app
-    # return LangGraphApp(graph)
-    raise NotImplementedError("Configure your LangGraph graph in conftest.py")
-
-
-{mocks_section}
-'''
+    return _conftest_for(
+        content,
+        adapter="LangGraphApp",
+        target="LangGraph graph",
+        setup=("Import your LangGraph graph", "from myagent import graph"),
+        example="        from myagent import graph\n        return LangGraphApp(graph)",
+        build="return LangGraphApp(graph)",
+    )
 
 
 def _customize_conftest_http(content: str) -> str:
     """Customize conftest.py for HTTP adapter."""
-    mocks_section = _get_mocks_section(content)
-    return f'''"""Pytest configuration for understudy tests."""
-
-import pytest
-
-from understudy import MockToolkit
-from understudy.http import HTTPApp
-
-# TODO: Configure your HTTP endpoint
-# AGENT_URL = "http://localhost:8000/chat"
-
-
-@pytest.fixture
-def app():
-    """Return your HTTP agent wrapped in HTTPApp.
-
-    Example:
-        return HTTPApp(url="http://localhost:8000/chat")
-    """
-    # TODO: Return your HTTP app
-    # return HTTPApp(url="http://localhost:8000/chat")
-    raise NotImplementedError("Configure your HTTP endpoint in conftest.py")
-
-
-{mocks_section}
-'''
+    return _conftest_for(
+        content,
+        adapter="HTTPApp",
+        target="HTTP agent",
+        setup=(
+            "Configure your HTTP endpoint",
+            'AGENT_URL = "http://localhost:8000/chat"',
+        ),
+        example='        return HTTPApp(url="http://localhost:8000/chat")',
+        build='return HTTPApp(url="http://localhost:8000/chat")',
+        configure="HTTP endpoint",
+    )
 
 
 @main.command("diff")
