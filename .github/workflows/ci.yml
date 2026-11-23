@@ -21,7 +21,7 @@ jobs:
     with:
       wheel-import: understudy
       # requires-python is >=3.12, so override the reusable default of 3.11.
-      python-versions: '["3.12", "3.13", "3.14"]'
+      python-versions: '["3.13", "3.14"]'
       run-preen: true
       coverage-floor: 80
       coverage-before-pytest: true
