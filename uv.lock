@@ -2906,7 +2906,7 @@ requires-dist = [
     { name = "langchain-openai", marker = "extra == 'langgraph'", specifier = ">=0.3.34" },
     { name = "langgraph", marker = "extra == 'langchain'", specifier = ">=1.2.14" },
     { name = "langgraph", marker = "extra == 'langgraph'", specifier = ">=1.2.14" },
-    { name = "litellm", specifier = ">=1.53.1" },
+    { name = "litellm", specifier = ">=1.80.10" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "python-dotenv", marker = "extra == 'adk'", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
